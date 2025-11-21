@@ -1,0 +1,81 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# ==== set variables here ====
+REMOTE_USER="ubuntu"
+REMOTE_HOME_DIR="/home/${REMOTE_USER}"
+SERVER="10.10.3.251"
+SERVER_INTERNAL_IP=${SERVER}
+AGENTS_STRING=("10.10.3.252,10.10.3.253")
+
+echo "[!] RKE2 Server will be deployed with these credentials :"
+echo "  - Remote User : ${REMOTE_USER}"
+echo "  - Remoto Homedir : ${REMOTE_HOME_DIR}"
+echo "  - RKE2 Server IPv4 : ${SERVER}"
+echo "  - RKE2 Agents IPv4 : ${AGENTS_STRING}\n"
+
+echo "[!] Deploying RKE2 Server..."
+#read -p "Enter server IPv4 address: " SERVER
+#read -p "Enter agents IPv4 addresses (separate with comma): " AGENTS_STRING
+#printf "\n"
+
+# ===== hard coded variables for dev mode =====
+#server="10.10.3.241"
+#SERVER="35.206.198.165"
+#SERVER_INTERNAL_IP=${SERVER}
+#AGENTS_STRING=("35.206.252.187,35.206.237.7")
+
+echo -e "[!] Deploying RKE2 server on ${SERVER}...\n"
+ssh -o StrictHostKeyChecking=no -T root@${SERVER} <<EOSSH
+mkdir -vp /etc/rancher/rke2/
+cat <<EOF > /etc/rancher/rke2/config.yaml
+cluster-cidr: 10.51.0.0/16
+service-cidr: 10.52.0.0/16
+cluster-dns: 10.52.0.10
+tls-san: ${SERVER},cluster1,\${HOSTNAME}
+EOF
+
+curl -sfL https://get.rke2.io | sh -
+systemctl enable rke2-server.service --now
+
+mkdir -vp ${REMOTE_HOME_DIR}/.kube
+cp -v /etc/rancher/rke2/rke2.yaml ${REMOTE_HOME_DIR}/.kube/config
+chown -v ${REMOTE_USER}:${REMOTE_USER} -R ${REMOTE_HOME_DIR}/.kube
+EOSSH
+
+TOKEN=$(ssh -o StrictHostKeyChecking=no -T root@${SERVER} rke2 token create --ttl 1h)
+echo "[!] RKE2 Token: ${TOKEN}"
+echo -e "[+] Done Deploying!\n"
+
+echo "[!] Deploying RKE2 Agent..."
+
+IFS=',' read -ra AGENTS_ARR <<< "${AGENTS_STRING}"
+
+for AGENT in "${AGENTS_ARR[@]}"; do
+    AGENT=$(echo "${AGENT}" | xargs)
+    echo -e "[!] Deploying RKE2 agent on ${AGENT}...\n"
+    ssh -o StrictHostKeyChecking=no -T root@${AGENT} <<EOSSH
+mkdir -vp /etc/rancher/rke2/
+cat <<EOF > /etc/rancher/rke2/config.yaml
+server: https://${SERVER_INTERNAL_IP}:9345
+token: ${TOKEN}
+EOF
+
+curl -sfL https://get.rke2.io | INSTALL_RKE2_TYPE="agent" sh -
+systemctl enable rke2-agent.service --now
+EOSSH
+    echo -e "[+] Done deploying agent on ${AGENT}.\n\n"
+done
+
+REMOTE_HOSTNAME=$(ssh -o StrictHostKeyChecking=no -T ${REMOTE_USER}@${SERVER} hostname)
+echo "[!] Retrieving kubeconfig from RKE2 Server node..."
+scp -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER}:${REMOTE_HOME_DIR}/.kube/config ${HOME}/.kube/config
+sed -i "s/127.0.0.1/${REMOTE_HOSTNAME}/g" ${HOME}/.kube/config
+sed -i "s/default/cluster1/g" ${HOME}/.kube/config
+ls ${HOME}/.kube/config 2>&1 | sed 's/^/[+] Kubeconfig successfully stored as /'
+printf "\n\n"
+
+echo "[!] Retrieving cluster nodes status..."
+kubectl get svc
+kubectl get node

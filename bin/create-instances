@@ -1,0 +1,13 @@
+#!/bin/bash
+
+vm_count=3
+i=0
+
+echo -e "[!] Creating ${vm_count} new instances in Openstack..."
+
+while [ $i -lt ${vm_count} ]; do
+    i=$((i+1))
+    echo -e "[!] Creating instance ${i} in Openstack server..."
+    openstack server create vm${i} --flavor Kubernetes --image "ubuntu-24.04 Cloud Image" --boot-from-volume 64 --port fixed-ip-vm${i} --key-name ibrahim
+    printf "\n\n"
+done

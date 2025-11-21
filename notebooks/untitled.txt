@@ -1,0 +1,11 @@
+===== before loss handling =====
+Total rows with invalid quantity: 22557
+Current minimal quantity value: 1
+Total rows with invalid unit price: 2636
+Current minimal unit price value: 0.001
+
+===== after loss handling ======
+Total rows with invalid quantity: 11684
+Current minimal quantity value: 1
+Total rows with invalid unit price: 6029
+Current minimal unit price value: 0.001
