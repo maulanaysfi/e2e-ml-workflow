@@ -1,0 +1,16 @@
+$TTL	604800
+@       IN      SOA     ibrahim.net.	root.ibrahim.net. (
+			            2025071003	; Serial
+    			        604800		; Refresh
+	    		        86400		; Retry
+		    	        2419200		; Expire
+        	    		604800	)	; Negative Cache TTL
+
+; Nameservers
+        IN      NS      ns1.ibrahim.net.
+
+; local cluster (vmware workstation)
+251     IN     PTR	    minio-console.ibrahim.net.
+251     IN     PTR	    minio.ibrahim.net.
+251     IN     PTR	    mlflow.ibrahim.net.
+251     IN     PTR	    clickhouse.ibrahim.net.

@@ -1,0 +1,18 @@
+$TTL	604800
+@	    IN	    SOA     ibrahim.net.	root.ibrahim.net. (
+			            2025071003      ; Serial
+            			604800          ; Refresh
+			            86400           ; Retry
+            			2419200         ; Expire
+			            604800  )       ; Negative Cache TTL
+
+; Nameservers
+@           	IN	    NS	    ns1.ibrahim.net.
+
+; A records
+@       		IN	    A	    10.10.3.251
+ns1       		IN	    A	    10.10.3.251
+minio-console	IN      A       10.10.3.251
+minio       	IN      A       10.10.3.251
+mlflow		    IN      A       10.10.3.251
+clickhouse	    IN      A       10.10.3.251
