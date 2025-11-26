@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -euo pipefail
+DATA_DIR=$HOME/git_repos/kubeflow-e2e
+
+services=(
+    "Local Path Provisioner"
+    "MetalLB Native"
+#    "Kubernetes Gateway API CRD"
+#    "Istio Operator CRD"
+)
+
+echo "[!] This script will install following service(s):"
+for service in "${services[@]}"; do
+    echo "  - $service"
+done
+printf "\n"
+
+contexts=$(kubectl config get-contexts -o name)
+echo "[!] Found kubernetes context(s):"
+for context in $contexts; do
+    echo "  - $context"
+done
+printf "\n"
+
+for context in $contexts; do
+    echo "[!] Installing Local Path Provisioner on $context..."
+    kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.32/deploy/local-path-storage.yaml --context $context 2>&1 | sed 's/^/[*] /'
+    printf "[+] Done installing Local Path Provisioner on $context!\n\n"
+
+    echo "[!] Installing Metallb Native on $context..."
+    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml --context $context 2>&1 | sed 's/^/[*] /'
+    printf "[+] Done installing MetalLB Native on $context!\n\n"
+
+#    echo "[!] Installing Kubernetes Gateway API CRD on $context..."
+#    kubectl --context $context apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.0/experimental-install.yaml 2>&1 | sed 's/^/[*] /'
+#    printf "[+] Done installing Kubernetes Gateway API CRD on $context!\n\n"
+
+#    echo "[!] Installing Istio Operator CRD on $context..."
+#    kubectl --context $context apply -f ${DATA_DIR}/multicluster/crd-operator.yaml 2>&1 | sed 's/^/[*] /'
+#    printf "[+] Done installing Istio Operator CRD on $context.\n\n"
+done
+
+for context in $contexts; do    
+    echo "[!] Applying IPPool and L2Advertisement for $context..."
+    kubectl apply --context $context -f ${DATA_DIR}/metallb/$context/ 2>&1 | sed 's/^/[*] /'
+    printf "[+] Done applying on $context!\n\n"
+done
