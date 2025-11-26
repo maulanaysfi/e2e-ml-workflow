@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # ==== set variables here ====
-REMOTE_USER="ubuntu"
+REMOTE_USER="ibrahim"
 REMOTE_HOME_DIR="/home/${REMOTE_USER}"
 SERVER="10.10.3.251"
 SERVER_INTERNAL_IP=${SERVER}
@@ -11,9 +11,9 @@ AGENTS_STRING=("10.10.3.252,10.10.3.253")
 
 echo "[!] RKE2 Server will be deployed with these credentials :"
 echo "  - Remote User : ${REMOTE_USER}"
-echo "  - Remoto Homedir : ${REMOTE_HOME_DIR}"
+echo "  - Remote Homedir : ${REMOTE_HOME_DIR}"
 echo "  - RKE2 Server IPv4 : ${SERVER}"
-echo "  - RKE2 Agents IPv4 : ${AGENTS_STRING}\n"
+echo -e "  - RKE2 Agents IPv4 : ${AGENTS_STRING}\n"
 
 echo "[!] Deploying RKE2 Server..."
 #read -p "Enter server IPv4 address: " SERVER
@@ -51,6 +51,22 @@ echo -e "[+] Done Deploying!\n"
 echo "[!] Deploying RKE2 Agent..."
 
 IFS=',' read -ra AGENTS_ARR <<< "${AGENTS_STRING}"
+
+if [ ${#AGENTS_ARR[@]} -eq 0 ]; then
+    echo "[!] No agent address set." >&2
+    REMOTE_HOSTNAME=$(ssh -o StrictHostKeyChecking=no -T ${REMOTE_USER}@${SERVER} hostname)
+    echo "[!] Retrieving kubeconfig from RKE2 Server node..."
+    scp -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER}:${REMOTE_HOME_DIR}/.kube/config ${HOME}/.kube/config
+    sed -i "s/127.0.0.1/${REMOTE_HOSTNAME}/g" ${HOME}/.kube/config
+    sed -i "s/default/cluster1/g" ${HOME}/.kube/config
+    ls ${HOME}/.kube/config 2>&1 | sed 's/^/[+] Kubeconfig successfully stored as /'
+    printf "\n\n"
+    
+    echo "[!] Retrieving cluster nodes status..."
+    kubectl get svc
+    kubectl get node
+    exit 1
+fi
 
 for AGENT in "${AGENTS_ARR[@]}"; do
     AGENT=$(echo "${AGENT}" | xargs)
