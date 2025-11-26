@@ -1,0 +1,28 @@
+image:
+  repository: "bitnamilegacy/minio"
+
+auth:
+  rootUser: admin
+  rootPassword: wazowski12344321
+
+persistence:
+  storageClass: local-path
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+console:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+  image:
+    repository: "bitnamilegacy/minio-object-browser"
