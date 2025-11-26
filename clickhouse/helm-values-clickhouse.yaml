@@ -1,0 +1,109 @@
+#defaultInitContainers:
+#  volumePermissions:
+#    enabled: true
+#    image:
+#      repository: bitnamilegacy/os-shell
+#      tag: 12-debian-12-r51
+#      digest: "sha256:77e65e9d633ec1463f8bea185763aa7ef91e5ddbe0b60beb1b0b5d4da58882b6"
+#      pullPolicy: IfNotPresent
+
+image:
+  repository: bitnamilegacy/clickhouse
+  tag: 25.7.5-debian-12-r0
+  digest: "sha256:2261b50861e29ad3a15d427db96ebf23aabb3be5b12b870192862777246cb349"
+  pullPolicy: IfNotPresent
+
+clusterName: default
+
+auth:
+  username: default
+  password: 123
+
+tls:
+  enabled: false
+
+shards: 1
+replicaCount: 1
+
+livenessProbe:
+  enabled: false
+
+readinessProbe:
+  enabled: true
+  failureThreshold: 3
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 250Mi
+  limits:
+    cpu: 1
+    memory: 1Gi
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  pathType: Prefix
+  hostname: clickhouse.ibrahim.net
+  ingressClassName: "nginx"
+  path: /
+
+persistentVolumeClaimRetentionPolicy:
+  enabled: true
+  whenScaled: Retain
+  whenDeleted: Delete
+
+persistence:
+  enabled: true
+  volumeName: data
+  storageClass: "local-path"
+  size: 8Gi
+
+keeper:
+  enabled: true
+  image:
+    repository: bitnamilegacy/clickhouse-keeper
+    tag: 25.7.5-debian-12-r0
+    digest: "sha256:d56ed003749704c62766b29c96437f72d2f3b9cf9a2e09069ebad99119d091be"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  livenessProbe:
+    enabled: false
+
+  readinessProbe:
+    enabled: true
+    failureThreshold: 3
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+  service:
+    type: ClusterIP
+
+  persistentVolumeClaimRetentionPolicy:
+    enabled: true
+    whenScaled: Retain
+    whenDeleted: Delete
+
+  persistence:
+    enabled: true
+    storageClass: "local-path"
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi

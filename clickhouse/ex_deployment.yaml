@@ -1,0 +1,1037 @@
+---
+# Source: clickhouse/templates/keeper/networkpolicy.yaml
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: ch-clickhouse-keeper
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/part-of: clickhouse
+    app.kubernetes.io/component: keeper
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/part-of: clickhouse
+      app.kubernetes.io/component: keeper
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - {}
+  ingress:
+    - ports:
+        - port: 9181
+        - port: 9234
+---
+# Source: clickhouse/templates/networkpolicy.yaml
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: ch-clickhouse
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/part-of: clickhouse
+    app.kubernetes.io/component: clickhouse
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/part-of: clickhouse
+      app.kubernetes.io/component: clickhouse
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - {}
+  ingress:
+    - ports:
+        - port: 8123
+        - port: 9000
+        - port: 9004
+        - port: 9005
+        - port: 9009
+---
+# Source: clickhouse/templates/keeper/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ch-clickhouse-keeper
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: keeper
+      app.kubernetes.io/part-of: clickhouse
+---
+# Source: clickhouse/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ch-clickhouse-shard0
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+    shard: "0"
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: clickhouse
+      app.kubernetes.io/part-of: clickhouse
+      shard: "0"
+---
+# Source: clickhouse/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ch-clickhouse-shard1
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+    shard: "1"
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: clickhouse
+      app.kubernetes.io/part-of: clickhouse
+      shard: "1"
+---
+# Source: clickhouse/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ch-clickhouse
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+automountServiceAccountToken: false
+---
+# Source: clickhouse/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ch-clickhouse
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+type: Opaque
+data:
+  admin-password: "SVZBU3JMRjFCUw=="
+---
+# Source: clickhouse/templates/configd-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ch-clickhouse-configd
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+data:
+  01-listen.xml: |
+    <yandex>
+        <listen_host>::</listen_host>
+        <listen_host>0.0.0.0</listen_host>
+        <listen_try>1</listen_try>
+    </yandex>
+  02-logger.xml: |
+    <yandex>
+        <logger>
+            <level>information</level>
+        </logger>
+    </yandex>
+  03-macros.xml: |
+    <yandex>
+        <macros>
+            <shard from_env="CLICKHOUSE_SHARD_ID"></shard>
+            <replica from_env="CLICKHOUSE_REPLICA_ID"></replica>
+            <layer>ch-clickhouse</layer>
+        </macros>
+    </yandex>
+  04-cluster.xml: |
+    <yandex>
+        <remote_servers>
+            <default>
+                <shard>
+                    <replica>
+                        <host>ch-clickhouse-shard0-0.ch-clickhouse-headless.clickhouse.svc.cluster.local</host>
+                        <port from_env="CLICKHOUSE_TCP_PORT"></port>
+                        <user from_env="CLICKHOUSE_ADMIN_USER"></user>
+                        <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
+                    </replica>
+                    <replica>
+                        <host>ch-clickhouse-shard0-1.ch-clickhouse-headless.clickhouse.svc.cluster.local</host>
+                        <port from_env="CLICKHOUSE_TCP_PORT"></port>
+                        <user from_env="CLICKHOUSE_ADMIN_USER"></user>
+                        <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
+                    </replica>
+                    <replica>
+                        <host>ch-clickhouse-shard0-2.ch-clickhouse-headless.clickhouse.svc.cluster.local</host>
+                        <port from_env="CLICKHOUSE_TCP_PORT"></port>
+                        <user from_env="CLICKHOUSE_ADMIN_USER"></user>
+                        <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
+                    </replica>
+                </shard>
+                <shard>
+                    <replica>
+                        <host>ch-clickhouse-shard1-0.ch-clickhouse-headless.clickhouse.svc.cluster.local</host>
+                        <port from_env="CLICKHOUSE_TCP_PORT"></port>
+                        <user from_env="CLICKHOUSE_ADMIN_USER"></user>
+                        <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
+                    </replica>
+                    <replica>
+                        <host>ch-clickhouse-shard1-1.ch-clickhouse-headless.clickhouse.svc.cluster.local</host>
+                        <port from_env="CLICKHOUSE_TCP_PORT"></port>
+                        <user from_env="CLICKHOUSE_ADMIN_USER"></user>
+                        <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
+                    </replica>
+                    <replica>
+                        <host>ch-clickhouse-shard1-2.ch-clickhouse-headless.clickhouse.svc.cluster.local</host>
+                        <port from_env="CLICKHOUSE_TCP_PORT"></port>
+                        <user from_env="CLICKHOUSE_ADMIN_USER"></user>
+                        <password from_env="CLICKHOUSE_ADMIN_PASSWORD"></password>
+                    </replica>
+                </shard>
+            </default>
+        </remote_servers>
+    </yandex>
+  05-zookeeper.xml: |
+    <yandex>
+        <zookeeper>
+            <node>
+                <host>ch-clickhouse-keeper-0.ch-clickhouse-keeper-headless.clickhouse.svc.cluster.local</host>
+                <port>9181</port>
+            </node>
+            <node>
+                <host>ch-clickhouse-keeper-1.ch-clickhouse-keeper-headless.clickhouse.svc.cluster.local</host>
+                <port>9181</port>
+            </node>
+            <node>
+                <host>ch-clickhouse-keeper-2.ch-clickhouse-keeper-headless.clickhouse.svc.cluster.local</host>
+                <port>9181</port>
+            </node>
+        </zookeeper>    
+    </yandex>
+  08-sampling.xml: |
+    <yandex>
+        <asynchronous_insert_log remove="1"/>
+        <asynchronous_metric_log remove="1"/>
+        <error_log remove="1"/>
+        <event_log remove="1"/>
+        <latency_log remove="1"/>
+        <metric_log remove="1"/>
+        <query_log remove="1"/>
+        <query_metric_log remove="1"/>
+        <query_thread_log remove="1"/>
+        <query_views_log remove="1"/>
+        <part_log remove="1"/>
+        <text_log remove="1"/>
+        <trace_log remove="1"/>
+        <opentelemetry_span_log remove="1"/>
+        <processors_profile_log remove="1"/>
+    </yandex>
+---
+# Source: clickhouse/templates/keeper/configd-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ch-clickhouse-keeper-configd
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+data:
+  01-raft.xml: |
+    <yandex>
+        <keeper_server>
+            <raft_configuration>
+                <server>
+                    <id>0</id>
+                    <hostname>ch-clickhouse-keeper-0.ch-clickhouse-keeper-headless.clickhouse.svc.cluster.local</hostname>
+                    <port from_env="CLICKHOUSE_KEEPER_RAFT_PORT"></port>
+                </server>
+                <server>
+                    <id>1</id>
+                    <hostname>ch-clickhouse-keeper-1.ch-clickhouse-keeper-headless.clickhouse.svc.cluster.local</hostname>
+                    <port from_env="CLICKHOUSE_KEEPER_RAFT_PORT"></port>
+                </server>
+                <server>
+                    <id>2</id>
+                    <hostname>ch-clickhouse-keeper-2.ch-clickhouse-keeper-headless.clickhouse.svc.cluster.local</hostname>
+                    <port from_env="CLICKHOUSE_KEEPER_RAFT_PORT"></port>
+                </server>
+            </raft_configuration>
+        </keeper_server>
+    </yandex>
+---
+# Source: clickhouse/templates/headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch-clickhouse-headless
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: http
+      targetPort: http
+      port: 8123
+      protocol: TCP
+    - name: tcp
+      targetPort: tcp
+      port: 9000
+      protocol: TCP
+    - name: tcp-mysql
+      targetPort: tcp-mysql
+      port: 9004
+      protocol: TCP
+    - name: tcp-postgresql
+      targetPort: tcp-postgresql
+      port: 9005
+      protocol: TCP
+    - name: http-intersrv
+      targetPort: http-intersrv
+      port: 9009
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+---
+# Source: clickhouse/templates/keeper/headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch-clickhouse-keeper-headless
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: tcp
+      port: 9181
+      protocol: TCP
+      targetPort: tcp
+    - name: tcp-raft
+      port: 9234
+      protocol: TCP
+      targetPort: raft
+  selector:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+---
+# Source: clickhouse/templates/keeper/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch-clickhouse-keeper
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+spec:
+  type: ClusterIP
+  sessionAffinity: None
+  ports:
+    - name: tcp
+      port: 9181
+      protocol: TCP
+      targetPort: tcp
+      nodePort: null
+    - name: tcp-raft
+      port: 9234
+      protocol: TCP
+      targetPort: raft
+      nodePort: null
+  selector:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+---
+# Source: clickhouse/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch-clickhouse
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+  annotations:
+    {}
+spec:
+  type: ClusterIP
+  sessionAffinity: None
+  ports:
+    - name: http
+      targetPort: http
+      port: 8123
+      protocol: TCP
+      nodePort: null
+    - name: tcp
+      targetPort: tcp
+      port: 9000
+      protocol: TCP
+      nodePort: null
+    - name: tcp-mysql
+      targetPort: tcp-mysql
+      port: 9004
+      protocol: TCP
+      nodePort: null
+    - name: tcp-postgresql
+      targetPort: tcp-postgresql
+      port: 9005
+      protocol: TCP
+      nodePort: null
+    - name: http-intersrv
+      targetPort: http-intersrv
+      port: 9009
+      protocol: TCP
+      nodePort: null
+  selector:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+---
+# Source: clickhouse/templates/keeper/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ch-clickhouse-keeper
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: keeper
+    app.kubernetes.io/part-of: clickhouse
+spec:
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: keeper
+      app.kubernetes.io/part-of: clickhouse
+  serviceName: ch-clickhouse-keeper-headless
+  updateStrategy:
+    rollingUpdate: {}
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/configd-configuration: 157061afa825864ce71b7f8c03cd3b21c37de9b4bec910eaea673c55bc01ec89
+      labels:
+        app.kubernetes.io/instance: ch
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/version: 25.7.5
+        helm.sh/chart: clickhouse-9.4.4
+        app.kubernetes.io/component: keeper
+        app.kubernetes.io/part-of: clickhouse
+    spec:
+      
+      automountServiceAccountToken: false
+      serviceAccountName: ch-clickhouse
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: ch
+                    app.kubernetes.io/name: clickhouse
+                    app.kubernetes.io/component: keeper
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      initContainers:
+      containers:
+        - name: keeper
+          image: docker.io/bitnami/clickhouse-keeper:25.7.5-debian-12-r0
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 1001
+            runAsNonRoot: true
+            runAsUser: 1001
+            seLinuxOptions: {}
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: CLICKHOUSE_KEEPER_SERVER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLICKHOUSE_KEEPER_TCP_PORT
+              value: "9181"
+            - name: CLICKHOUSE_KEEPER_RAFT_PORT
+              value: "9234"
+          ports:
+            - name: tcp
+              containerPort: 9181
+            - name: raft
+              containerPort: 9234
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+            tcpSocket:
+              port: tcp
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+            exec:
+              command:
+                - bash
+                - -ec
+                - |
+                  OK=$(exec 3<>/dev/tcp/127.0.0.1/9181; printf 'ruok' >&3; IFS=; tee <&3; exec 3<&-;)
+                  if [[ "${OK}" == "imok" ]]; then exit 0; else exit 1; fi
+          resources:
+            limits:
+              cpu: 750m
+              ephemeral-storage: 2Gi
+              memory: 768Mi
+            requests:
+              cpu: 500m
+              ephemeral-storage: 50Mi
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/clickhouse-keeper
+            - name: configd-configuration
+              mountPath: /bitnami/clickhouse-keeper/etc/keeper_config.d
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse-keeper/etc
+              subPath: app-conf-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse-keeper/logs
+              subPath: app-logs-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse-keeper/tmp
+              subPath: app-tmp-dir
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
+      volumes:
+        - name: empty-dir
+          emptyDir: {}
+        - name: configd-configuration
+          configMap:
+            name: ch-clickhouse-keeper-configd
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: data
+        labels:
+          app.kubernetes.io/instance: ch
+          app.kubernetes.io/name: clickhouse
+          app.kubernetes.io/component: keeper
+          app.kubernetes.io/part-of: clickhouse
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "8Gi"
+---
+# Source: clickhouse/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ch-clickhouse-shard0
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+    shard: "0"
+spec:
+  replicas: 3
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: clickhouse
+      app.kubernetes.io/part-of: clickhouse
+      shard: "0"
+  serviceName: ch-clickhouse-headless
+  updateStrategy:
+    rollingUpdate: {}
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/configd-configuration: 76fa48f7dd8cdddd8f876c6ce505e170ed5dea54900162c7610fde8b4e2d9fca
+      labels:
+        app.kubernetes.io/instance: ch
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/version: 25.7.5
+        helm.sh/chart: clickhouse-9.4.4
+        app.kubernetes.io/component: clickhouse
+        app.kubernetes.io/part-of: clickhouse
+        shard: "0"
+    spec:
+      
+      automountServiceAccountToken: false
+      serviceAccountName: ch-clickhouse
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: ch
+                    app.kubernetes.io/name: clickhouse
+                    app.kubernetes.io/component: clickhouse
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      initContainers:
+      containers:
+        - name: clickhouse
+          image: docker.io/bitnami/clickhouse:25.7.5-debian-12-r0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 1001
+            runAsNonRoot: true
+            runAsUser: 1001
+            seLinuxOptions: {}
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: CLICKHOUSE_HTTP_PORT
+              value: "8123"
+            - name: CLICKHOUSE_TCP_PORT
+              value: "9000"
+            - name: CLICKHOUSE_MYSQL_PORT
+              value: "9004"
+            - name: CLICKHOUSE_POSTGRESQL_PORT
+              value: "9005"
+            - name: CLICKHOUSE_INTERSERVER_HTTP_PORT
+              value: "9009"
+            - name: CLICKHOUSE_SHARD_ID
+              value: "shard0"
+            - name: CLICKHOUSE_REPLICA_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLICKHOUSE_ADMIN_USER
+              value: "default"
+            - name: CLICKHOUSE_ADMIN_PASSWORD_FILE
+              value: /opt/bitnami/clickhouse/secrets/admin-password
+          resources:
+            limits:
+              cpu: 750m
+              ephemeral-storage: 2Gi
+              memory: 768Mi
+            requests:
+              cpu: 500m
+              ephemeral-storage: 50Mi
+              memory: 512Mi
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: tcp
+              containerPort: 9000
+            - name: tcp-postgresql
+              containerPort: 9005
+            - name: tcp-mysql
+              containerPort: 9004
+            - name: http-intersrv
+              containerPort: 9009
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+            tcpSocket:
+              port: http
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+            httpGet:
+              path: /ping
+              port: http
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/clickhouse
+            - name: configd-configuration
+              mountPath: /bitnami/clickhouse/etc/config.d
+            - name: secrets
+              mountPath: /opt/bitnami/clickhouse/secrets
+              readOnly: true
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse/etc
+              subPath: app-conf-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse/logs
+              subPath: app-logs-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse/tmp
+              subPath: app-tmp-dir
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
+      volumes:
+        - name: empty-dir
+          emptyDir: {}
+        - name: configd-configuration
+          configMap:
+            name: ch-clickhouse-configd
+        - name: secrets
+          secret:
+            secretName: ch-clickhouse
+            defaultMode: 256
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: data
+        labels:
+          app.kubernetes.io/instance: ch
+          app.kubernetes.io/name: clickhouse
+          app.kubernetes.io/component: clickhouse
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "8Gi"
+---
+# Source: clickhouse/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ch-clickhouse-shard1
+  namespace: "clickhouse"
+  labels:
+    app.kubernetes.io/instance: ch
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/version: 25.7.5
+    helm.sh/chart: clickhouse-9.4.4
+    app.kubernetes.io/component: clickhouse
+    app.kubernetes.io/part-of: clickhouse
+    shard: "1"
+spec:
+  replicas: 3
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ch
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/component: clickhouse
+      app.kubernetes.io/part-of: clickhouse
+      shard: "1"
+  serviceName: ch-clickhouse-headless
+  updateStrategy:
+    rollingUpdate: {}
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/configd-configuration: 76fa48f7dd8cdddd8f876c6ce505e170ed5dea54900162c7610fde8b4e2d9fca
+      labels:
+        app.kubernetes.io/instance: ch
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/version: 25.7.5
+        helm.sh/chart: clickhouse-9.4.4
+        app.kubernetes.io/component: clickhouse
+        app.kubernetes.io/part-of: clickhouse
+        shard: "1"
+    spec:
+      
+      automountServiceAccountToken: false
+      serviceAccountName: ch-clickhouse
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: ch
+                    app.kubernetes.io/name: clickhouse
+                    app.kubernetes.io/component: clickhouse
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      initContainers:
+      containers:
+        - name: clickhouse
+          image: docker.io/bitnami/clickhouse:25.7.5-debian-12-r0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 1001
+            runAsNonRoot: true
+            runAsUser: 1001
+            seLinuxOptions: {}
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: CLICKHOUSE_HTTP_PORT
+              value: "8123"
+            - name: CLICKHOUSE_TCP_PORT
+              value: "9000"
+            - name: CLICKHOUSE_MYSQL_PORT
+              value: "9004"
+            - name: CLICKHOUSE_POSTGRESQL_PORT
+              value: "9005"
+            - name: CLICKHOUSE_INTERSERVER_HTTP_PORT
+              value: "9009"
+            - name: CLICKHOUSE_SHARD_ID
+              value: "shard1"
+            - name: CLICKHOUSE_REPLICA_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLICKHOUSE_ADMIN_USER
+              value: "default"
+            - name: CLICKHOUSE_ADMIN_PASSWORD_FILE
+              value: /opt/bitnami/clickhouse/secrets/admin-password
+          resources:
+            limits:
+              cpu: 750m
+              ephemeral-storage: 2Gi
+              memory: 768Mi
+            requests:
+              cpu: 500m
+              ephemeral-storage: 50Mi
+              memory: 512Mi
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: tcp
+              containerPort: 9000
+            - name: tcp-postgresql
+              containerPort: 9005
+            - name: tcp-mysql
+              containerPort: 9004
+            - name: http-intersrv
+              containerPort: 9009
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+            tcpSocket:
+              port: http
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+            httpGet:
+              path: /ping
+              port: http
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/clickhouse
+            - name: configd-configuration
+              mountPath: /bitnami/clickhouse/etc/config.d
+            - name: secrets
+              mountPath: /opt/bitnami/clickhouse/secrets
+              readOnly: true
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse/etc
+              subPath: app-conf-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse/logs
+              subPath: app-logs-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/clickhouse/tmp
+              subPath: app-tmp-dir
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
+      volumes:
+        - name: empty-dir
+          emptyDir: {}
+        - name: configd-configuration
+          configMap:
+            name: ch-clickhouse-configd
+        - name: secrets
+          secret:
+            secretName: ch-clickhouse
+            defaultMode: 256
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: data
+        labels:
+          app.kubernetes.io/instance: ch
+          app.kubernetes.io/name: clickhouse
+          app.kubernetes.io/component: clickhouse
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "8Gi"
