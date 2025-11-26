@@ -3,4 +3,4 @@
     remote = s3
 ['remote "s3"']
     url = s3://dvc
-    endpointurl = http://10.100.10.11:9000
+    endpointurl = http://minio.ibrahim.net
