@@ -6,14 +6,14 @@ from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperato
 with DAG(
     dag_id="my_first_k8s_pod_dag",
     start_date=datetime(2024, 1, 1),
-    schedule_interval="@daily",
+    schedule="@daily",
     catchup=False,
     tags=["example", "kubernetes"],
 ) as dag:
     KubernetesPodOperator(
         task_id="hello_kubernetes",
         name="hello-k8s",
-        namespace="default",
+        namespace="airflow",
         image="python:3.11-slim",
         cmds=["python", "-c"],
         arguments=[
