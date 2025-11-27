@@ -136,3 +136,21 @@ logs:
     medium: Memory
   persistence:
     enabled: false
+
+dags:
+  gitSync:
+    enabled: true
+    repo: git@github.com:maulanaysfi/e2e-ml-workflow.git
+    branch: master
+    rev: HEAD
+    depth: 1
+    maxFailures: 5
+    subPath: "dags"
+    sshKeySecret: airflow-ssh-secret
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
