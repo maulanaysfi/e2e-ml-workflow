@@ -1,0 +1,130 @@
+ingress:
+  apiServer:
+    enabled: true
+    path: "/"
+    pathType: "ImplementationSpecific"
+    hosts:
+      - name: airflow.ibrahim.net
+    ingressClassName: "nginx"
+  web:
+    enabled: false
+  flower:
+    enabled: false
+
+executor: "KubernetesExecutor"
+allowPodLaunching: true
+
+data:
+  metadataConnection:
+    user: airflow
+    pass: d2F6b3dza2kK
+    protocol: postgresql
+    host: postgresql-0.postgresql-hl.postgresql.svc.cluster.local
+    port: 5432
+    db: data_warehouse_db
+    sslmode: disable
+
+workers:
+  replicas: 1
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    timeoutSeconds: 20
+    failureThreshold: 5
+    periodSeconds: 24
+  persistence:
+    enabled: false
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+scheduler:
+  enabled: true
+  livenessProbe:
+    initialDelaySeconds: 10
+    timeoutSeconds: 20
+    failureThreshold: 5
+    periodSeconds: 24
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  safeToEvict: true
+
+apiServer:
+  replicas: 1
+
+webserver:
+  enabled: true
+  replicas: 1
+
+triggerer:
+  enabled: true
+  replicas: 1
+  persistence:
+    enabled: false
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+dagProcessor:
+  enabled: true
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+flower:
+  enabled: false
+
+redis:
+  enabled: false
+
+ports:
+  flowerUI: 5555
+  airflowUI: 8080
+  workerLogs: 8793
+  triggererLogs: 8794
+  redisDB: 6379
+  statsdIngest: 9125
+  statsdScrape: 9102
+  pgbouncer: 6543
+  pgbouncerScrape: 9127
+  apiServer: 8080
+
+pgbouncer:
+  enabled: true
+  replicas: 1
+  resources:
+    limits:
+      cpu: 250m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+postgresql:
+  enabled: false
+
+logs:
+  emptyDirConfig:
+    sizeLimit: 1Gi
+    medium: Memory
+  persistence:
+    enabled: false
