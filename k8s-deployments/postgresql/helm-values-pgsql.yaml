@@ -1,0 +1,75 @@
+image:
+  registry: registry-1.docker.io
+  repository: bitnami/postgresql
+  tag: latest
+
+auth:
+  enablePostgresUser: true
+  postgresPassword: "wazowski12344321"
+  username: "airflow"
+  password: "d2F6b3dza2kK"
+  database: "data_warehouse_db"
+  replicationUsername: repl_user
+  usePasswordFiles: true
+
+containerPorts:
+  postgresql: 5432
+
+shmVolume:
+  enabled: true
+  sizeLimit: 1Gi
+
+primary:
+  name: data_warehouse_db
+  resources:
+    requests:
+      cpu: 2
+      memory: 512Mi
+    limits:
+      cpu: 3
+      memory: 1024Mi
+
+  service:
+    type: LoadBalancer
+    ports:
+      postgresql: 5432
+    clusterIP: ""
+    loadBalancerIP: ""
+  persistence:
+    enabled: true
+    storageClass: "local-path"
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+  persistentVolumeClaimRetentionPolicy:
+    enabled: true
+    whenScaled: Retain
+    whenDeleted: Delete
+
+readReplicas:
+  name: read
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+    clusterIP: None
+    externalTrafficPolicy: Cluster
+  persistence:
+    enabled: true
+    storageClass: "local-path"
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+  persistentVolumeClaimRetentionPolicy:
+    enabled: true
+    whenScaled: Retain
+    whenDeleted: Delete
