@@ -65,6 +65,14 @@ apiServer:
 webserver:
   enabled: true
   replicas: 1
+  defaultUser:
+    enabled: true
+    role: Admin
+    username: ibrahim
+    email: maulanayusuf5579@gmail.com
+    firstName: Ibrahim
+    lastName: Tampan
+    password: wazowski12344321
 
 triggerer:
   enabled: true
