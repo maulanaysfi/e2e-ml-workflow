@@ -21,7 +21,7 @@ data:
     protocol: postgresql
     host: postgresql-0.postgresql-hl.postgresql.svc.cluster.local
     port: 5432
-    db: data_warehouse_db
+    db: airflow
     sslmode: disable
 
 workers:
