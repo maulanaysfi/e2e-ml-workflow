@@ -16,3 +16,4 @@ minio-console	IN      A       10.10.3.251
 minio       	IN      A       10.10.3.251
 mlflow		    IN      A       10.10.3.251
 clickhouse	    IN      A       10.10.3.251
+airflow 	    IN      A       10.10.3.251
