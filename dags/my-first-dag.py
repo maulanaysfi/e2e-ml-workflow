@@ -19,6 +19,7 @@ with DAG(
         arguments=[
             "print('Hello from Airflow in Kubernetes!')",
         ],
-        get_logs=True,
-        is_delete_operator_pod=True,
+        on_finish_action="keep_pod",
+        is_delete_operator_pod=False,
     )
+
