@@ -62,7 +62,7 @@ persistentVolumeClaimRetentionPolicy:
 persistence:
   enabled: true
   volumeName: data
-  storageClass: "local-path"
+  storageClass: "nfs-sep"
   size: 8Gi
 
 keeper:
@@ -103,7 +103,7 @@ keeper:
 
   persistence:
     enabled: true
-    storageClass: "local-path"
+    storageClass: "nfs-sep"
     accessModes:
       - ReadWriteOnce
     size: 8Gi

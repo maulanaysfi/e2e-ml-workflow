@@ -6,7 +6,7 @@ auth:
   rootPassword: wazowski12344321
 
 persistence:
-  storageClass: local-path
+  storageClass: nfs-sep
 
 resources:
   requests:

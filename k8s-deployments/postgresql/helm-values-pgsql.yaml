@@ -8,7 +8,7 @@ auth:
   postgresPassword: "wazowski12344321"
   username: "airflow"
   password: "d2F6b3dza2kK"
-  database: "data_warehouse_db"
+  database: "airflow"
   replicationUsername: repl_user
   usePasswordFiles: true
 
@@ -20,7 +20,7 @@ shmVolume:
   sizeLimit: 1Gi
 
 primary:
-  name: data_warehouse_db
+  name: postgres
   resources:
     requests:
       cpu: 2
@@ -37,7 +37,7 @@ primary:
     loadBalancerIP: ""
   persistence:
     enabled: true
-    storageClass: "local-path"
+    storageClass: "nfs-sep"
     accessModes:
       - ReadWriteOnce
     size: 8Gi
@@ -65,7 +65,7 @@ readReplicas:
     externalTrafficPolicy: Cluster
   persistence:
     enabled: true
-    storageClass: "local-path"
+    storageClass: "nfs-sep"
     accessModes:
       - ReadWriteOnce
     size: 8Gi

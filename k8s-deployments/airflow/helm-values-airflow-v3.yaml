@@ -33,7 +33,12 @@ workers:
     failureThreshold: 5
     periodSeconds: 24
   persistence:
-    enabled: false
+    enabled: true
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+    size: 4Gi
+    storageClassName: nfs-sep
   resources:
     limits:
       cpu: 1
@@ -78,7 +83,12 @@ triggerer:
   enabled: true
   replicas: 1
   persistence:
-    enabled: false
+    enabled: true
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+    size: 8Gi
+    storageClassName: nfs-sep
   resources:
     limits:
       cpu: 500m
@@ -131,11 +141,10 @@ postgresql:
   enabled: false
 
 logs:
-  emptyDirConfig:
-    sizeLimit: 1Gi
-    medium: Memory
   persistence:
-    enabled: false
+    enabled: true
+    size: 4Gi
+    storageClassName: nfs-sep
 
 dags:
   gitSync:
@@ -154,4 +163,3 @@ dags:
       requests:
         cpu: 100m
         memory: 128Mi
-
