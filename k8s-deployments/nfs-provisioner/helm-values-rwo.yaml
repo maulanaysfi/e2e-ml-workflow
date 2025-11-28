@@ -1,0 +1,21 @@
+nfs:
+  server: 10.10.3.253
+  path: /srv/nfs
+  reclaimPolicy: Delete
+
+storageClass:
+  name: nfs-sep
+  allowVolumeExpansion: False
+  reclaimPolicy: Delete
+  archiveOnDelete: False
+  volumeBindingMode: Immediate
+  defaultClass: True
+  provisionerName: nfs-vm3
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
