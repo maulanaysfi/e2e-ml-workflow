@@ -1,7 +1,6 @@
 nfs:
-  server: 10.10.3.253
-  path: /srv/nfs
-  reclaimPolicy: Delete
+  server: 10.140.0.7
+  path: /shared/nfs
 
 storageClass:
   name: nfs-sep
@@ -10,7 +9,7 @@ storageClass:
   archiveOnDelete: False
   volumeBindingMode: Immediate
   defaultClass: True
-  provisionerName: nfs-vm3
+  provisionerName: nfs-sep
 
 resources:
   limits:
