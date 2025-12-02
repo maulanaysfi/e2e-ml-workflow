@@ -3,4 +3,6 @@
     remote = s3
 ['remote "s3"']
     url = s3://dvc
-    endpointurl = http://minio.ibrahim.net
+    endpointurl = https://minio.maulanaysfi.my.id
+    access_key_id = kfp-ro
+    secret_access_key = 6c9W7yYll0q0NVJzuacQ
