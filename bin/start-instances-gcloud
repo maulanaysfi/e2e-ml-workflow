@@ -1,0 +1,40 @@
+#!/bin/bash
+
+vm_count=3
+i=0
+ip_vm1=""
+ip_vm2=""
+ip_vm3=""
+
+while [ $i -lt ${vm_count} ]; do
+    i=$((i+1))
+    INSTANCE_NAME="debian12-node${i}"
+    ZONE="asia-east1-b"
+    echo -e "[!] Starting instance ${i} on Google Cloud..."
+    gcloud compute instances start debian12-node${i} --zone=asia-east1-b
+    printf "\n"
+
+    echo -n "[!] Retrieving external IPv4 of instance ${i} on Google Cloud..."
+    externalIP=$(gcloud compute instances describe "${INSTANCE_NAME}" \
+                 --zone="${ZONE}" \
+                 --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+    
+    eval ip_vm${i}="${externalIP}"
+    echo " Done!"
+    printf "\n"
+done
+
+echo "--- Retrieved IPs ---"
+echo "VM 1 IP: ${ip_vm1}"
+echo "VM 2 IP: ${ip_vm2}"
+echo "VM 3 IP: ${ip_vm3}"
+echo -e "---------------------\n"
+
+
+echo -n "[!] Appending hostnames and IP addresses in /etc/hosts..."
+sudo sed -i '/debian12-node/d' /etc/hosts
+echo "${ip_vm1}    debian12-node1" | sudo tee -a /etc/hosts > /dev/null
+echo "${ip_vm2}    debian12-node2" | sudo tee -a /etc/hosts > /dev/null
+echo "${ip_vm3}    debian12-node3" | sudo tee -a /etc/hosts > /dev/null
+echo " Done!"
+

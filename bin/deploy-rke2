@@ -5,14 +5,15 @@ set -euo pipefail
 # ==== set variables here ====
 REMOTE_USER="ibrahim"
 REMOTE_HOME_DIR="/home/${REMOTE_USER}"
-SERVER="10.10.3.251"
-SERVER_INTERNAL_IP=${SERVER}
-AGENTS_STRING=("10.10.3.252,10.10.3.253")
+SERVER="debian12-node1"
+SERVER_INTERNAL_IP="10.140.0.5"
+#AGENTS_STRING=("vm2,vm3")
+AGENTS_STRING="debian12-node2, debian12-node3"
 
 echo "[!] RKE2 Server will be deployed with these credentials :"
 echo "  - Remote User : ${REMOTE_USER}"
 echo "  - Remote Homedir : ${REMOTE_HOME_DIR}"
-echo "  - RKE2 Server IPv4 : ${SERVER}"
+echo "  - RKE2 Server IPv4 : ${SERVER}, with internal IPv4 ${SERVER_INTERNAL_IP}"
 echo -e "  - RKE2 Agents IPv4 : ${AGENTS_STRING}\n"
 
 echo "[!] Deploying RKE2 Server..."
