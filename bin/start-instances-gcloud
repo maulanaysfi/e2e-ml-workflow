@@ -16,8 +16,8 @@ while [ $i -lt ${vm_count} ]; do
 
     echo -n "[!] Retrieving external IPv4 of instance ${i} on Google Cloud..."
     externalIP=$(gcloud compute instances describe "${INSTANCE_NAME}" \
-                 --zone="${ZONE}" \
-                 --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+                --zone="${ZONE}" \
+                --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
     
     eval ip_vm${i}="${externalIP}"
     echo " Done!"
