@@ -1,11 +1,11 @@
+import os, sys
 from kfp import compiler, dsl
-# from kfp.dsl import Dataset, Input, Model, Output
+from kfp.dsl import Dataset, Input, Model, Output, Artifact
 
-image = "maulanaysfi/python-kfp:0.2"
+image = "maulanaysfi/python-kfp:0.3"
 
-# step 1 : loading dataset
 @dsl.component(base_image=image)
-def ingest_data():
+def ingest_data(tmp_data: Output[Dataset]):
     import boto3, os, time
     import pandas as pd
     from datetime import datetime
@@ -44,7 +44,7 @@ def ingest_data():
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     bucketname = "datalake"
-    local_path = "./p1"
+    local_path = "/tmp"
     tmp_name = f"tmp-dataset-{current_time}.csv"
     tmp_local_path = f"{local_path}/{tmp_name}"
     tmp_bucket_path = f"tmp/{tmp_name}"
@@ -62,6 +62,7 @@ def ingest_data():
     # print(df.count())
 
     df.to_csv(tmp_local_path, index=False)
+    df.to_csv(tmp_data.path, index=False)
 
     try:
         s3.upload_file(tmp_local_path, bucketname, tmp_bucket_path)
@@ -69,9 +70,8 @@ def ingest_data():
     except Exception as e:
         print(f"Upload failed: {e}")
 
-
 @dsl.component(base_image=image)
-def merge_data():
+def merge_data(input_tmp_data: Input[Dataset], output_dataset: Output[Dataset]):
     import os, time, boto3
     import pandas as pd
     from botocore.exceptions import ClientError
@@ -129,7 +129,6 @@ def merge_data():
         except Exception as e:
             print(f"An error occured: {e}")
 
-
     def check_object_exists(s3_client, bucket_name: str, object_key: str) -> bool:
         """
         Checking whether an object is available or not.
@@ -172,11 +171,11 @@ def merge_data():
 
     # data lake configs. aka temporary data
     bucket_prefix = 'tmp/'
-    local_path = './p2'
+    local_path = '/tmp'
 
     # data stream configs. aka primary data
     bucket_stream_path = 'stream/online-retail-stream.csv'
-    local_stream_path = './p2/stream'
+    local_stream_path = f'{local_path}/stream'
     stream_name = 'online-retail-stream.csv'
 
     os.makedirs(local_path, exist_ok=True)
@@ -200,13 +199,18 @@ def merge_data():
         print('Merging latest data with last data stream...')
 
         df_stream = pd.read_csv(f'{local_stream_path}/{stream_name}')
-        df_tmp = pd.read_csv(latest_file)
+        # ======== df_tmp injected with built-in kubeflow dataset flow. =======
+        # df_tmp = pd.read_csv(latest_file)
+        df_tmp = pd.read_csv(input_tmp_data.path)
 
         df = pd.concat([df_stream, df_tmp])
         df = df.reset_index(drop=True)
         df.info()
+        # ======== save to local dir before upload to bucket =========
         df_stream.to_csv(f'{local_stream_path}/last-online-retail-stream.csv', index=False)
         df.to_csv(f'{local_stream_path}/{stream_name}', index=False)
+        # ======== pass dataset to next process =========
+        df.to_csv(output_dataset.path, index=False)
 
         print('Uploading merged dataset to bucket...')
         try:
@@ -225,7 +229,10 @@ def merge_data():
             
         latest_file = max(all_files, key=os.path.getmtime)
         df_tmp = pd.read_csv(latest_file)
+        # ======== save to local dir before upload to bucket =========
         df_tmp.to_csv(f'{local_stream_path}/{stream_name}', index=False)
+        # ======== pass dataset to next process =========
+        df_tmp.to_csv(output_dataset.path, index=False)
         print('Uploading new data stream to bucket...')
         try:
             s3.upload_file(f'{local_stream_path}/{stream_name}', bucketname, bucket_stream_path)
@@ -233,9 +240,8 @@ def merge_data():
         except Exception as e:
             print(f'Upload failed: {e}')
 
-# step 3 : train model
 @dsl.component(base_image=image)
-def preprocess_data():
+def preprocess_data(input_dataset: Input[Dataset], output_feat_dataset: Output[Dataset]):
     import os, sys, time, boto3
     import pandas as pd
     from botocore.exceptions import ClientError
@@ -301,14 +307,13 @@ def preprocess_data():
     bucketname = 'datalake'
 
     # data stream configs. aka primary data
+    local_path = '/tmp'
     bucket_stream_path = 'stream/online-retail-stream.csv'
-    local_path = './p3'
     stream_name = 'online-retail-stream.csv'
     local_stream_path = f'{local_path}/{stream_name}'
 
     # feature store configs
     feat_bucket_stream_path = 'feature/online-retail-feature-stream.csv'
-    local_path = './p3'
     feat_stream_name = f'feat_{stream_name}'
     feat_local_stream_path = f'{local_path}/{feat_stream_name}'
 
@@ -319,7 +324,9 @@ def preprocess_data():
         recursive_download(bucketname, bucket_stream_path, local_stream_path)
 
         print('Loading data...')
-        df = pd.read_csv(local_stream_path)
+        # ======== df_tmp injected with built-in kubeflow dataset flow. =======
+        # df = pd.read_csv(local_stream_path)
+        df = pd.read_csv(input_dataset.path)
 
         print('Assessing data...\n')
         print(df.info(), end="\n\n")
@@ -468,7 +475,10 @@ def preprocess_data():
             print(mod_df_perday.info())
             
             # exporting data
+            # ======== save to local dir before upload to bucket =========
             mod_df_perday.to_csv(feat_local_stream_path, index=False)
+            # ======== pass dataset to next process =========
+            mod_df_perday.to_csv(output_feat_dataset.path, index=False)
             try:
                 s3.upload_file(feat_local_stream_path, bucketname, feat_bucket_stream_path)
                 print(f'Upload success! Object saved as {feat_bucket_stream_path}')
@@ -480,10 +490,8 @@ def preprocess_data():
         print(err_msg)
         sys.exit(err_msg)
 
-
-# step 4 : evaluate model
 @dsl.component(base_image=image)
-def explore_data():
+def explore_data(input_feat_dataset: Input[Dataset], sales_per_year_png: Output[Artifact], sales_everyday_in_month_png: Output[Artifact], sales_everyday_in_week_png: Output[Artifact]):
     import os, sys, time, boto3
     import pandas as pd
     import matplotlib.pyplot as plt
@@ -563,7 +571,7 @@ def explore_data():
 
     # data stream configs. aka primary data
     bucket_stream_path = 'feature/online-retail-feature-stream.csv'
-    local_path = './p4'
+    local_path = '/tmp'
     stream_name = 'online-retail-feature-stream.csv'
     local_stream_path = f'{local_path}/{stream_name}'
 
@@ -574,7 +582,9 @@ def explore_data():
         recursive_download(bucketname, bucket_stream_path, local_stream_path)
 
         print('Loading data...')
-        df_perday = pd.read_csv(local_stream_path)
+        # ======== df_perday injected with built-in kubeflow dataset flow =========
+        # df_perday = pd.read_csv(local_stream_path)
+        df_perday = pd.read_csv(input_feat_dataset.path)
 
         print('Assessing data...\n')
         print(df_perday.info(), end="\n\n")
@@ -592,6 +602,7 @@ def explore_data():
         plt.grid(axis='y', alpha=0.4, zorder=1)
         plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))
         plt.savefig(f'{local_path}/sales_per_year.png')
+        plt.savefig(sales_per_year_png.path)
         plt.close()
 
         # average sales everyday in a month
@@ -607,6 +618,7 @@ def explore_data():
         plt.grid(alpha=0.4)
         plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))
         plt.savefig(f'{local_path}/sales_everyday_in_month.png')
+        plt.savefig(sales_everyday_in_month_png.path)
         plt.close()
 
         # average sales everyday in a week
@@ -624,6 +636,7 @@ def explore_data():
         plt.grid(alpha=0.4, axis='y', zorder=1)
         plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))
         plt.savefig(f'{local_path}/sales_everyday_in_week.png')
+        plt.savefig(sales_everyday_in_week_png.path)
         plt.close()
 
         upload_count = 0
@@ -665,7 +678,7 @@ def explore_data():
         sys.exit(err_msg)
 
 @dsl.component(base_image=image)
-def train_model():
+def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model]):
     import contextlib, io, os, sys, boto3, joblib, time
     import numpy as np
     import pandas as pd
@@ -751,7 +764,7 @@ def train_model():
     bucketname = 'datalake'
 
     # process local path
-    local_path = './p5'
+    local_path = '/tmp'
 
     # model path configs
     model_name = f'lightgbm_{current_date}.pkl'
@@ -775,7 +788,9 @@ def train_model():
         recursive_download(bucketname, dataset_bucket_path, dataset_local_path)
 
         print('Loading data...')
-        data = pd.read_csv(dataset_local_path)
+        # ======== data injected with built-in kubeflow dataset flow. =======
+        # data = pd.read_csv(dataset_local_path)
+        data = pd.read_csv(input_feat_dataset.path)
 
         print('Assessing data...\n')
         print(data.info(), end="\n\n")
@@ -841,7 +856,10 @@ def train_model():
         print(f"MAE : {mae:.2f}")
         print(f"RMSE : {rmse:.2f}")
 
+        # ======== save to local dir before upload to bucket =========
         joblib.dump(forecaster, model_local_path)
+        # ======== pass model to next process =========
+        joblib.dump(forecaster, output_model.path)
 
         y_steps = y_test[:steps]
         y_steps = pd.DataFrame(y_steps)
@@ -898,7 +916,7 @@ def train_model():
         sys.exit(err_msg)
 
 @dsl.component(base_image=image)
-def serve_model():
+def serve_model(input_model: Input[Model]):
     import boto3, joblib, time, os
     from pathlib import Path
 
@@ -958,7 +976,7 @@ def serve_model():
     bucketname = 'datalake'
 
     # process local path
-    local_path = './p6'
+    local_path = '/tmp'
 
     # model path configs
     model_bucket_prefix = 'models'
@@ -976,25 +994,49 @@ def serve_model():
         print(f"Folder '{local_path}' is empty or there is no file with '{extension}' extension.")
         
     latest_model = max(all_files, key=os.path.getmtime)
-    model = joblib.load(latest_model)
+    # ======== model injected with built-in kubeflow dataset flow. =======
+    # model = joblib.load(latest_model)
+    model = joblib.load(input_model.path)
     print(model)
 
-# defining the pipeline
-@dsl.pipeline(name="End-to-end ML Workflow")
-def e2e_workflow():
-    first_ingest_data = ingest_data()
-    second_merge_data = merge_data()
-    third_preprocess_data = preprocess_data()
-    fourth_explore_data = explore_data()
-    fifth_train_model = train_model()
-    sixth_serve_model = serve_model()
+s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
+s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
+s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
 
-# s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
-# s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
-# s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
+if str(s3_access_key_id) == 'None':
+    err = 'Please set S3 credentials to your environment variables to proceed!\nKF pipeline compile canceled.\n'
+    sys.exit(err)
+else:
+    # defining the pipeline
+    @dsl.pipeline(name="Online Retail End-to-end ML Workflow")
+    def e2e_workflow():
+        first_op = ingest_data()
+        first_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
+        first_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
+        first_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        second_op = merge_data(input_tmp_data=first_op.outputs['tmp_data'])
+        second_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
+        second_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
+        second_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        third_op = preprocess_data(input_dataset=second_op.outputs['output_dataset'])
+        third_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
+        third_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
+        third_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        fourth_op = explore_data(input_feat_dataset=third_op.outputs['output_feat_dataset'])
+        fourth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
+        fourth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
+        fourth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        fifth_op = train_model(input_feat_dataset=third_op.outputs['output_feat_dataset'])
+        fifth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
+        fifth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
+        fifth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        sixth_op = serve_model(input_model=fifth_op.outputs['output_model'])
+        sixth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
+        sixth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
+        sixth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
 
-# compiling the pipeline
-if __name__ == "__main__":
-    filename = "kubeflow_pipeline.yaml"
-    compiler.Compiler().compile(pipeline_func=e2e_workflow, package_path=filename)
-    print(f"Successfully compiled {filename}")
+    # compiling the pipeline
+    if __name__ == "__main__":
+        filename = "kubeflow_pipeline.yaml"
+        compiler.Compiler().compile(pipeline_func=e2e_workflow, package_path=filename)
+        print(f"Successfully compiled {filename}")

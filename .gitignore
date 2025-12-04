@@ -4,3 +4,4 @@ pipelines/p*
 .env*
 reference*
 __pycache__
+kubeflow_pipeline.yaml
