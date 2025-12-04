@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "[!] Shutting down all instances in GCP."
+gcloud compute instances stop debian12-node1 debian12-node2 debian12-node3 --zone=asia-east1-b
+echo "[+] Done!"
