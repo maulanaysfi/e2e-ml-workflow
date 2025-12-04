@@ -1,0 +1,717 @@
+# PIPELINE DEFINITION
+# Name: end-to-end-ml-workflow
+components:
+  comp-explore-data:
+    executorLabel: exec-explore-data
+  comp-ingest-data:
+    executorLabel: exec-ingest-data
+  comp-merge-data:
+    executorLabel: exec-merge-data
+  comp-preprocess-data:
+    executorLabel: exec-preprocess-data
+  comp-serve-model:
+    executorLabel: exec-serve-model
+  comp-train-model:
+    executorLabel: exec-train-model
+deploymentSpec:
+  executors:
+    exec-explore-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - explore_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.15.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef explore_data():\n    import os, sys, time, boto3\n    import\
+          \ pandas as pd\n    import matplotlib.pyplot as plt\n    import seaborn\
+          \ as sns\n    from botocore.exceptions import ClientError\n\n    from matplotlib.ticker\
+          \ import FuncFormatter\n    pd.set_option('display.float_format', '{:.2f}'.format)\n\
+          \n    s3_access_key_id = os.getenv(\"S3_ACCESS_KEY_ID\")\n    s3_secret_access_key\
+          \ = os.getenv(\"S3_SECRET_ACCESS_KEY\")\n    s3_endpointurl = os.getenv(\"\
+          S3_ENDPOINT_URL\")\n\n    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id,\
+          \ aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)\n\
+          \n    def recursive_download(bucket, key, local_path):\n        max_retries\
+          \ = 5\n        for attempt in range(1, max_retries + 1):\n            try:\n\
+          \                s3.download_file(bucket, key, local_path)\n           \
+          \     print(f\"Download success!. Saved as: {local_path}\")\n          \
+          \      break\n            except Exception as e:\n                print(f\"\
+          Download attempt #{attempt} fail. Error: {e}. Retrying...\")\n         \
+          \       if attempt == max_retries:\n                    print(\"Maximum\
+          \ attempt reached. Download failed.\")\n                else:\n        \
+          \            time.sleep(2)\n\n    def check_object_exists(s3_client, bucket_name:\
+          \ str, object_key: str) -> bool:\n        \"\"\"\n        Checking whether\
+          \ an object is available or not.\n        \"\"\"\n        max_retries =\
+          \ 5\n\n        for attempt in range(1, max_retries + 1):\n            try:\n\
+          \                s3_client.head_object(Bucket=bucket_name, Key=object_key)\n\
+          \                print(f\"Object '{object_key}' found in bucket '{bucket_name}'.\"\
+          )\n                return True\n\n            except ClientError as e:\n\
+          \                error_code = e.response['Error']['Code']\n\n          \
+          \      if error_code == '404':\n                    print(f\"Object '{object_key}'\
+          \ not found (404).\")\n                    return False\n              \
+          \  elif error_code == '403':\n                    if attempt < max_retries:\n\
+          \                        print(f\"Attempt #{attempt} failed with 403 (Forbidden).\
+          \ Retrying...\")\n                        time.sleep(2)\n              \
+          \          continue\n                    else:\n                       \
+          \ print(f\"Maximum retry attempts ({max_retries}) reached. 403 (Forbidden)\
+          \ error persists.\")\n                        print(f\"Boto3/MinIO error:\
+          \ {e}\")\n                        return False\n                else:\n\
+          \                    print(f\"Boto3/MinIO error: {e}\")\n              \
+          \      return False\n\n            except Exception as e:\n            \
+          \    print(f\"An error occured: {e}\")\n                return False\n\n\
+          \        return False\n\n    def sterling_formatter(i, pos):\n        if\
+          \ i >= 1e6:\n            return f\"\xA3{i*1e-6:.1f} M\"\n        elif i\
+          \ >= 1e3:\n            return f\"\xA3{i*1e-3:.1f} K\"\n        else:\n \
+          \           return f\"\xA3{i:.0f}\"\n\n    # bucket name\n    bucketname\
+          \ = 'datalake'\n\n    # data stream configs. aka primary data\n    bucket_stream_path\
+          \ = 'feature/online-retail-feature-stream.csv'\n    local_path = './p4'\n\
+          \    stream_name = 'online-retail-feature-stream.csv'\n    local_stream_path\
+          \ = f'{local_path}/{stream_name}'\n\n    os.makedirs(local_path, exist_ok=True)\n\
+          \n    if check_object_exists(s3, bucketname, bucket_stream_path):\n    \
+          \    print('Downloading latest data stream...')\n        recursive_download(bucketname,\
+          \ bucket_stream_path, local_stream_path)\n\n        print('Loading data...')\n\
+          \        df_perday = pd.read_csv(local_stream_path)\n\n        print('Assessing\
+          \ data...\\n')\n        print(df_perday.info(), end=\"\\n\\n\")\n\n    \
+          \    # sales per year\n        sales_year_sum = df_perday.groupby('Year').agg(\n\
+          \            y = ('Sales', 'sum')\n        ).sort_values('Year', ascending=True).reset_index()\n\
+          \n        plt.figure(figsize=(14,4))\n        sns.barplot(data=sales_year_sum,\
+          \ x='Year', y='y', zorder=2)\n        plt.title('Total sales revenue obtained\
+          \ by Year')\n        plt.ylabel('Total sales (Sterling)')\n        plt.xlabel('Year')\n\
+          \        plt.grid(axis='y', alpha=0.4, zorder=1)\n        plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))\n\
+          \        plt.savefig(f'{local_path}/sales_per_year.png')\n        plt.close()\n\
+          \n        # average sales everyday in a month\n        avg_sum_sales = df_perday.groupby('Date')['Sales'].mean().reset_index()\n\
+          \n        plt.figure(figsize=(16,4))\n        sns.lineplot(data=avg_sum_sales,\
+          \ x='Date', y='Sales')\n        plt.title('Average Total sales revenue everyday\
+          \ in every Month')\n        plt.ylabel('Total Sales (Sterling)')\n     \
+          \   # plt.ylim(2.5*1e4,4.5*1e4)\n        # plt.xlim(0.5,31.5)\n        plt.xticks(avg_sum_sales['Date'].unique())\n\
+          \        plt.grid(alpha=0.4)\n        plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))\n\
+          \        plt.savefig(f'{local_path}/sales_everyday_in_month.png')\n    \
+          \    plt.close()\n\n        # average sales everyday in a week\n       \
+          \ avg_sum_sales = df_perday.groupby('DayName')['Sales'].mean().reset_index()\n\
+          \n        days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']\n\
+          \        avg_sum_sales['DayName'] = pd.Categorical(avg_sum_sales['DayName'],\
+          \ categories=days, ordered=True)\n        avg_sum_sales = avg_sum_sales.sort_values('DayName')\n\
+          \n        plt.figure(figsize=(16,4))\n        sns.barplot(data=avg_sum_sales,\
+          \ x='DayName', y='Sales', zorder=2, width=0.6)\n        plt.title('Average\
+          \ Total sales revenue everyday in every Week')\n        plt.ylabel('Total\
+          \ Sales (Sterling)')\n        plt.xticks(avg_sum_sales['DayName'].unique())\n\
+          \        plt.grid(alpha=0.4, axis='y', zorder=1)\n        plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))\n\
+          \        plt.savefig(f'{local_path}/sales_everyday_in_week.png')\n     \
+          \   plt.close()\n\n        upload_count = 0\n        extension = '.png'\n\
+          \        plot_prefix = 'plots'\n        for file_name in os.listdir(local_path):\n\
+          \            local_full_path = os.path.join(local_path, file_name)\n\n \
+          \           if not os.path.isfile(local_full_path):\n                continue\n\
+          \n            if not file_name.lower().endswith(extension):\n          \
+          \      print(f\"skipped: '{file_name}' (does not have '{extension}' extension.)\"\
+          )\n                continue\n\n            object_key = os.path.join(plot_prefix,\
+          \ file_name).replace('\\\\', '/')\n\n            try:\n                s3.upload_file(local_full_path,\
+          \ bucketname, object_key)\n                print(f'Upload success! Object\
+          \ saved as {object_key}')\n                upload_count += 1\n\n       \
+          \     except ClientError as e:\n                print(f\"  [-] Upload '{file_name}'\
+          \ failed: ClientError ({e})\")\n            except Exception as e:\n   \
+          \             print(f\"  [-] Upload '{file_name}' failed: {e}\")\n\n   \
+          \     print(f\"Done! Successfully uploaded {upload_count} file(s).\")\n\n\
+          \        # try:\n        #     s3.upload_file(local_stream_path, bucketname,\
+          \ bucket_stream_path)\n        #     print(f'Upload success! Object saved\
+          \ as {bucket_stream_path}')\n        # except Exception as e:\n        #\
+          \     print(f'Upload failed: {e}')\n\n    else:\n        err_msg = \"Data\
+          \ stream not found! Cannot proceed.\"\n        print(err_msg)\n        sys.exit(err_msg)\n\
+          \n"
+        image: maulanaysfi/python-kfp:0.2
+    exec-ingest-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - ingest_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.15.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef ingest_data():\n    import boto3, os, time\n    import pandas\
+          \ as pd\n    from datetime import datetime\n\n    s3_access_key_id = os.getenv(\"\
+          S3_ACCESS_KEY_ID\")\n    s3_secret_access_key = os.getenv(\"S3_SECRET_ACCESS_KEY\"\
+          )\n    s3_endpointurl = os.getenv(\"S3_ENDPOINT_URL\")\n\n    s3 = boto3.client(\n\
+          \        \"s3\",\n        aws_access_key_id=s3_access_key_id,\n        aws_secret_access_key=s3_secret_access_key,\n\
+          \        endpoint_url=s3_endpointurl,\n    )\n    response = s3.list_buckets()\n\
+          \n    print(\"Found bucket(s):\")\n    for bucket in response[\"Buckets\"\
+          ]:\n        print(bucket[\"Name\"])\n    print(\"\")\n\n    def recursive_download(bucket,\
+          \ key, local_path):\n        max_retries = 5\n        for attempt in range(1,\
+          \ max_retries + 1):\n            try:\n                s3.download_file(bucket,\
+          \ key, local_path)\n                print(f\"Download success!. Saved as:\
+          \ {local_path}\")\n                break\n            except Exception as\
+          \ e:\n                print(f\"Download attempt #{attempt} fail. Error:\
+          \ {e}. Retrying...\")\n                if attempt == max_retries:\n    \
+          \                print(\"Maximum attempt reached. Download failed.\")\n\
+          \                else:\n                    time.sleep(2)\n\n    current_time\
+          \ = datetime.now().strftime(\"%Y-%m-%d_%H-%M-%S\")\n\n    bucketname = \"\
+          datalake\"\n    local_path = \"./p1\"\n    tmp_name = f\"tmp-dataset-{current_time}.csv\"\
+          \n    tmp_local_path = f\"{local_path}/{tmp_name}\"\n    tmp_bucket_path\
+          \ = f\"tmp/{tmp_name}\"\n    raw_name = \"online-retail-full.csv\"\n   \
+          \ raw_local_path = f\"{local_path}/{raw_name}\"\n    raw_bucket_path = f\"\
+          raw/{raw_name}\"\n\n    os.makedirs(local_path, exist_ok=True)\n\n    recursive_download(bucketname,\
+          \ raw_bucket_path, raw_local_path)\n\n    df = pd.read_csv(raw_local_path)\n\
+          \    df = df[:300000]\n\n    # print(df.count())\n\n    df.to_csv(tmp_local_path,\
+          \ index=False)\n\n    try:\n        s3.upload_file(tmp_local_path, bucketname,\
+          \ tmp_bucket_path)\n        print(f\"Upload success! Object saved as {tmp_bucket_path}\"\
+          )\n    except Exception as e:\n        print(f\"Upload failed: {e}\")\n\n"
+        image: maulanaysfi/python-kfp:0.2
+    exec-merge-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - merge_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.15.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef merge_data():\n    import os, time, boto3\n    import pandas\
+          \ as pd\n    from botocore.exceptions import ClientError\n    from pathlib\
+          \ import Path\n\n    s3_access_key_id = os.getenv(\"S3_ACCESS_KEY_ID\")\n\
+          \    s3_secret_access_key = os.getenv(\"S3_SECRET_ACCESS_KEY\")\n    s3_endpointurl\
+          \ = os.getenv(\"S3_ENDPOINT_URL\")\n\n    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id,\
+          \ aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)\n\
+          \n    def recursive_download(bucket, key, local_path):\n        max_retries\
+          \ = 5\n        for attempt in range(1, max_retries + 1):\n            try:\n\
+          \                s3.download_file(bucket, key, local_path)\n           \
+          \     print(f\"Download success!. Saved as: {local_path}\")\n          \
+          \      break\n            except Exception as e:\n                print(f\"\
+          Download attempt #{attempt} fail. Error: {e}. Retrying...\")\n         \
+          \       if attempt == max_retries:\n                    print(\"Maximum\
+          \ attempt reached. Download failed.\")\n                else:\n        \
+          \            time.sleep(2)\n\n    def download_latest_file(bucket, prefix,\
+          \ local_path):\n        \"\"\"\n        Download the latest object under\
+          \ a folder prefix.\n        \"\"\"\n        try:\n            response =\
+          \ s3.list_objects_v2(\n                Bucket=bucket,\n                Prefix=prefix\n\
+          \            )\n\n            if 'Contents' not in response:\n         \
+          \       print(f\"Folder '{prefix}' in bucket '{bucket}' is empty or not\
+          \ found!\")\n                return\n\n            all_objects = response['Contents']\n\
+          \n            all_objects.sort(key=lambda obj: obj['LastModified'], reverse=True)\n\
+          \n            latest_object = all_objects[0]\n            latest_key = latest_object['Key']\n\
+          \            latest_modified = latest_object['LastModified']\n\n       \
+          \     file_name = latest_key.split('/')[-1]\n            download_path =\
+          \ f\"{local_path}/{file_name}\"\n\n            print(f\"Latest object found:\
+          \ {latest_key} (last modified: {latest_modified})\")\n\n            recursive_download(bucket,\
+          \ latest_key, download_path)\n\n        except Exception as e:\n       \
+          \     print(f\"An error occured: {e}\")\n\n\n    def check_object_exists(s3_client,\
+          \ bucket_name: str, object_key: str) -> bool:\n        \"\"\"\n        Checking\
+          \ whether an object is available or not.\n        \"\"\"\n        max_retries\
+          \ = 5\n\n        for attempt in range(1, max_retries + 1):\n           \
+          \ try:\n                s3_client.head_object(Bucket=bucket_name, Key=object_key)\n\
+          \                print(f\"Object '{object_key}' found in bucket '{bucket_name}'.\"\
+          )\n                return True\n\n            except ClientError as e:\n\
+          \                error_code = e.response['Error']['Code']\n\n          \
+          \      if error_code == '404':\n                    print(f\"Object '{object_key}'\
+          \ not found (404).\")\n                    return False\n              \
+          \  elif error_code == '403':\n                    if attempt < max_retries:\n\
+          \                        print(f\"Attempt #{attempt} failed with 403 (Forbidden).\
+          \ Retrying...\")\n                        time.sleep(2)\n              \
+          \          continue\n                    else:\n                       \
+          \ print(f\"Maximum retry attempts ({max_retries}) reached. 403 (Forbidden)\
+          \ error persists.\")\n                        print(f\"Boto3/MinIO error:\
+          \ {e}\")\n                        return False\n                else:\n\
+          \                    print(f\"Boto3/MinIO error: {e}\")\n              \
+          \      return False\n\n            except Exception as e:\n            \
+          \    print(f\"An error occured: {e}\")\n                return False\n\n\
+          \        return False\n\n    # bucket name\n    bucketname = 'datalake'\n\
+          \n    # data lake configs. aka temporary data\n    bucket_prefix = 'tmp/'\n\
+          \    local_path = './p2'\n\n    # data stream configs. aka primary data\n\
+          \    bucket_stream_path = 'stream/online-retail-stream.csv'\n    local_stream_path\
+          \ = './p2/stream'\n    stream_name = 'online-retail-stream.csv'\n\n    os.makedirs(local_path,\
+          \ exist_ok=True)\n    os.makedirs(local_stream_path, exist_ok=True)\n\n\
+          \    download_latest_file(bucketname, bucket_prefix, local_path)\n\n   \
+          \ if check_object_exists(s3, bucketname, bucket_stream_path):\n        print('Downloading\
+          \ latest data stream...')\n        recursive_download(bucketname, bucket_stream_path,\
+          \ f'{local_stream_path}/{stream_name}')\n\n        dir_path = Path(local_path)\n\
+          \        file_pattern = f'*.csv'\n        all_files = [f for f in dir_path.glob(file_pattern)\
+          \ if f.is_file()]\n\n        if not all_files:\n            print(f\"Folder\
+          \ '{local_path}' is empty or there is no file with '.csv' extension.\")\n\
+          \n        latest_file = max(all_files, key=os.path.getmtime)\n\n       \
+          \ print('Merging latest data with last data stream...')\n\n        df_stream\
+          \ = pd.read_csv(f'{local_stream_path}/{stream_name}')\n        df_tmp =\
+          \ pd.read_csv(latest_file)\n\n        df = pd.concat([df_stream, df_tmp])\n\
+          \        df = df.reset_index(drop=True)\n        df.info()\n        df_stream.to_csv(f'{local_stream_path}/last-online-retail-stream.csv',\
+          \ index=False)\n        df.to_csv(f'{local_stream_path}/{stream_name}',\
+          \ index=False)\n\n        print('Uploading merged dataset to bucket...')\n\
+          \        try:\n            s3.upload_file(f'{local_stream_path}/{stream_name}',\
+          \ bucketname, bucket_stream_path)\n            print(f'Upload success! Object\
+          \ saved as {bucket_stream_path}')\n        except Exception as e:\n    \
+          \        print(f'Upload failed: {e}')\n    else:\n        print('Starting\
+          \ new data stream.')\n        dir_path = Path(local_path)\n        file_pattern\
+          \ = f'*.csv'\n        all_files = [f for f in dir_path.glob(file_pattern)\
+          \ if f.is_file()]\n\n        if not all_files:\n            print(f\"Folder\
+          \ '{local_path}' is empty or there is no file with '.csv' extension.\")\n\
+          \n        latest_file = max(all_files, key=os.path.getmtime)\n        df_tmp\
+          \ = pd.read_csv(latest_file)\n        df_tmp.to_csv(f'{local_stream_path}/{stream_name}',\
+          \ index=False)\n        print('Uploading new data stream to bucket...')\n\
+          \        try:\n            s3.upload_file(f'{local_stream_path}/{stream_name}',\
+          \ bucketname, bucket_stream_path)\n            print(f'Upload success! Object\
+          \ saved as {bucket_stream_path}')\n        except Exception as e:\n    \
+          \        print(f'Upload failed: {e}')\n\n"
+        image: maulanaysfi/python-kfp:0.2
+    exec-preprocess-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - preprocess_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.15.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef preprocess_data():\n    import os, sys, time, boto3\n    import\
+          \ pandas as pd\n    from botocore.exceptions import ClientError\n\n    s3_access_key_id\
+          \ = os.getenv(\"S3_ACCESS_KEY_ID\")\n    s3_secret_access_key = os.getenv(\"\
+          S3_SECRET_ACCESS_KEY\")\n    s3_endpointurl = os.getenv(\"S3_ENDPOINT_URL\"\
+          )\n\n    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id, aws_secret_access_key=s3_secret_access_key,\
+          \ endpoint_url=s3_endpointurl)\n\n    def recursive_download(bucket, key,\
+          \ local_path):\n        max_retries = 5\n        for attempt in range(1,\
+          \ max_retries + 1):\n            try:\n                s3.download_file(bucket,\
+          \ key, local_path)\n                print(f\"Download success!. Saved as:\
+          \ {local_path}\")\n                break\n            except Exception as\
+          \ e:\n                print(f\"Download attempt #{attempt} fail. Error:\
+          \ {e}. Retrying...\")\n                if attempt == max_retries:\n    \
+          \                print(\"Maximum attempt reached. Download failed.\")\n\
+          \                else:\n                    time.sleep(2)\n\n    def check_object_exists(s3_client,\
+          \ bucket_name: str, object_key: str) -> bool:\n        \"\"\"\n        Checking\
+          \ whether an object is available or not.\n        \"\"\"\n        max_retries\
+          \ = 5\n\n        for attempt in range(1, max_retries + 1):\n           \
+          \ try:\n                s3_client.head_object(Bucket=bucket_name, Key=object_key)\n\
+          \                print(f\"Object '{object_key}' found in bucket '{bucket_name}'.\"\
+          )\n                return True\n\n            except ClientError as e:\n\
+          \                error_code = e.response['Error']['Code']\n\n          \
+          \      if error_code == '404':\n                    print(f\"Object '{object_key}'\
+          \ not found (404).\")\n                    return False\n              \
+          \  elif error_code == '403':\n                    if attempt < max_retries:\n\
+          \                        print(f\"Attempt #{attempt} failed with 403 (Forbidden).\
+          \ Retrying...\")\n                        time.sleep(2)\n              \
+          \          continue\n                    else:\n                       \
+          \ print(f\"Maximum retry attempts ({max_retries}) reached. 403 (Forbidden)\
+          \ error persists.\")\n                        print(f\"Boto3/MinIO error:\
+          \ {e}\")\n                        return False\n                else:\n\
+          \                    print(f\"Boto3/MinIO error: {e}\")\n              \
+          \      return False\n\n            except Exception as e:\n            \
+          \    print(f\"An error occured: {e}\")\n                return False\n\n\
+          \        return False\n\n    # bucket name\n    bucketname = 'datalake'\n\
+          \n    # data stream configs. aka primary data\n    bucket_stream_path =\
+          \ 'stream/online-retail-stream.csv'\n    local_path = './p3'\n    stream_name\
+          \ = 'online-retail-stream.csv'\n    local_stream_path = f'{local_path}/{stream_name}'\n\
+          \n    # feature store configs\n    feat_bucket_stream_path = 'feature/online-retail-feature-stream.csv'\n\
+          \    local_path = './p3'\n    feat_stream_name = f'feat_{stream_name}'\n\
+          \    feat_local_stream_path = f'{local_path}/{feat_stream_name}'\n\n   \
+          \ os.makedirs(local_path, exist_ok=True)\n\n    if check_object_exists(s3,\
+          \ bucketname, bucket_stream_path):\n        print('Downloading latest data\
+          \ stream...')\n        recursive_download(bucketname, bucket_stream_path,\
+          \ local_stream_path)\n\n        print('Loading data...')\n        df = pd.read_csv(local_stream_path)\n\
+          \n        print('Assessing data...\\n')\n        print(df.info(), end=\"\
+          \\n\\n\")\n\n        # correcting column types\n        df['InvoiceDate']\
+          \ = pd.to_datetime(df['InvoiceDate'])\n        df['CustomerID'] = df['CustomerID'].astype('Int64')\n\
+          \n        # datetime extraction\n        df['Year'] = df['InvoiceDate'].dt.year\n\
+          \        df['Month'] = df['InvoiceDate'].dt.month\n        df['Week'] =\
+          \ df['InvoiceDate'].dt.isocalendar().week.astype(int)\n        df['Date']\
+          \ = df['InvoiceDate'].dt.day\n        df['NormDate'] = df['InvoiceDate'].dt.normalize()\n\
+          \n        # 0=monday, 6=sunday\n        df['DayOfWeek'] = df['InvoiceDate'].dt.dayofweek\n\
+          \        df['Day'] = df['InvoiceDate'].dt.day_name()\n        df.info()\n\
+          \n        # negative unit price value handling\n        print(f'\\nHandling\
+          \ invalid unit price value...')\n        invalid_unitprice = df[df['UnitPrice']\
+          \ <= 0]\n        print(f'Total rows with invalid unit price: {int(invalid_unitprice['UnitPrice'].count())}.\
+          \ Rows deleted')\n        df = df[df['UnitPrice'] > 0]\n        print(f'Current\
+          \ minimal unit price value: {df['UnitPrice'].min()}')\n\n        # create\
+          \ sales column\n        print(f'\\nCreating sales column...')\n        df['Sales']\
+          \ = df['Quantity'] * df['UnitPrice']\n\n        # negative sales value handling\n\
+          \        print(f'\\nHandling invalid sales value...')\n        invalid_sales\
+          \ = df[df['Sales'] <= 0]\n        print(f'Total rows with invalid sales:\
+          \ {int(invalid_sales['Sales'].count())}. Rows deleted')\n        df = df[df['Sales']\
+          \ > 0]\n        print(f'Current minimal sales value: {df['Sales'].min()}')\n\
+          \n        # obtaining real sales value (profit), grouping all by single\
+          \ transaction (single InvoiceNo)\n        df_ui = df.groupby('InvoiceNo').agg(\n\
+          \            ItemSold = ('InvoiceNo', 'count'),\n            NormDate =\
+          \ ('NormDate', 'min'),\n            Year = ('Year', 'mean'),\n         \
+          \   Month = ('Month', 'mean'),\n            Week = ('Week', 'mean'),\n \
+          \           Date = ('Date', 'mean'),\n            Quantity = ('Quantity',\
+          \ 'sum'),\n            Sales = ('Sales', 'sum'),\n            Country =\
+          \ ('Country', 'first')\n        ).sort_values('InvoiceNo', ascending=True).reset_index()\n\
+          \n        df_ui['Year'] = df_ui['Year'].astype('int64')\n        df_ui['Month']\
+          \ = df_ui['Month'].astype('int64')\n        df_ui['Week'] = df_ui['Week'].astype('int64')\n\
+          \        df_ui['Date'] = df_ui['Date'].astype('int64')\n\n        # group\
+          \ datas per day\n        print('\\nPreprocessing data to group data by date...')\n\
+          \        df_perday = df_ui.groupby('NormDate').agg(\n            Invoices\
+          \ = ('InvoiceNo', 'count'),\n            ItemSold = ('ItemSold', 'sum'),\n\
+          \            Year = ('Year', 'mean'),\n            Month = ('Month', 'mean'),\n\
+          \            Week = ('Week', 'mean'),\n            Date = ('Date', 'mean'),\n\
+          \            Quantity = ('Quantity', 'sum'),\n            Sales = ('Sales',\
+          \ 'sum')\n        ).sort_values('NormDate', ascending=True).reset_index()\n\
+          \n        # converting all integers type to int64\n        df_perday['Year']\
+          \ = df_perday['Year'].astype('int64')\n        df_perday['Month'] = df_perday['Month'].astype('int64')\n\
+          \        df_perday['Week'] = df_perday['Week'].astype('int64')\n       \
+          \ df_perday['Date'] = df_perday['Date'].astype('int64')\n\n        df_perday['DayName']\
+          \ = pd.to_datetime(df_perday['NormDate']).dt.day_name()\n        print(df_perday.count())\n\
+          \        df_count = df_perday['NormDate'].count()\n        print(f'Current\
+          \ total dataset rows: {df_count}')\n        if df_count <= 200:\n      \
+          \      err_msg = \"\\nInsufficient dataset rows!\\nDataset temporarily won't\
+          \ be proceeded to feature engineering and used for model training.\\nProgram\
+          \ exiting!\"\n            print (err_msg)\n            sys.exit(err_msg)\n\
+          \        else:\n            print('Generating features...')\n          \
+          \  mod_df_perday = df_perday\n            mod_df_perday['DayNo'] = mod_df_perday['NormDate'].dt.dayofweek.astype(int)\n\
+          \            mod_df_perday['IsMonthStart'] = mod_df_perday['NormDate'].dt.is_month_start.astype(int)\n\
+          \            mod_df_perday['IsMonthEnd'] = mod_df_perday['NormDate'].dt.is_month_end.astype(int)\n\
+          \n            # 0 = spring, 1 = summer, 2 = autumn, 3 = winter\n       \
+          \     def get_season(month):\n                if month in [3, 4, 5]:\n \
+          \                   return 0\n                elif month in [6, 7, 8]:\n\
+          \                    return 1\n                elif month in [9, 10, 11]:\n\
+          \                    return 2\n                else:\n                 \
+          \   return 3\n\n            mod_df_perday['Season'] = mod_df_perday['Month'].apply(get_season).astype(int)\n\
+          \n            # Lag_1, Lag_7, Lag_30\n            mod_df_perday['Qty_lag1']\
+          \ = mod_df_perday['Quantity'].shift(1)\n            mod_df_perday['Qty_lag7']\
+          \ = mod_df_perday['Quantity'].shift(7)\n            mod_df_perday['Qty_lag30']\
+          \ = mod_df_perday['Quantity'].shift(30)\n\n            # RolSum_7, RolSum_30\n\
+          \            mod_df_perday['Qty_RolSum7'] = mod_df_perday['Quantity'].rolling(7).sum()\n\
+          \            mod_df_perday['Qty_RolSum30'] = mod_df_perday['Quantity'].rolling(30).sum()\n\
+          \n            # RolMean_7, RolMean_30\n            mod_df_perday['Qty_RolMean7']\
+          \ = mod_df_perday['Quantity'].rolling(7).mean()\n            mod_df_perday['Qty_RolMean30']\
+          \ = mod_df_perday['Quantity'].rolling(30).mean()\n\n            # RolStd_7,\
+          \ RolStd_30\n            mod_df_perday['Qty_RolStd7'] = mod_df_perday['Quantity'].rolling(7).std()\n\
+          \            mod_df_perday['Qty_RolStd30'] = mod_df_perday['Quantity'].rolling(30).std()\n\
+          \n            # EMA_7\n            mod_df_perday['Qty_EMA7'] = mod_df_perday['Quantity'].rolling(7).std()\n\
+          \n            # Lag_1, Lag_7, Lag_30\n            mod_df_perday['Sls_lag1']\
+          \ = mod_df_perday['Sales'].shift(1)\n            mod_df_perday['Sls_lag7']\
+          \ = mod_df_perday['Sales'].shift(7)\n            mod_df_perday['Sls_lag30']\
+          \ = mod_df_perday['Sales'].shift(30)\n\n            # RolSum_7, RolSum_30\n\
+          \            mod_df_perday['Sls_RolSum7'] = mod_df_perday['Sales'].rolling(7).sum()\n\
+          \            mod_df_perday['Sls_RolSum30'] = mod_df_perday['Sales'].rolling(30).sum()\n\
+          \n            # RolMean_7, RolMean_30\n            mod_df_perday['Sls_RolMean7']\
+          \ = mod_df_perday['Sales'].rolling(7).mean()\n            mod_df_perday['Sls_RolMean30']\
+          \ = mod_df_perday['Sales'].rolling(30).mean()\n\n            # RolStd_7,\
+          \ RolStd_30\n            mod_df_perday['Sls_RolStd7'] = mod_df_perday['Sales'].rolling(7).std()\n\
+          \            mod_df_perday['Sls_RolStd30'] = mod_df_perday['Sales'].rolling(30).std()\n\
+          \n            # EMA_7\n            mod_df_perday['Sls_EMA7'] = mod_df_perday['Sales'].rolling(7).std()\n\
+          \n            # Dropping null values after feature engineering\n       \
+          \     mod_df_perday.dropna(inplace=True)\n            print(mod_df_perday.info())\n\
+          \n            # exporting data\n            mod_df_perday.to_csv(feat_local_stream_path,\
+          \ index=False)\n            try:\n                s3.upload_file(feat_local_stream_path,\
+          \ bucketname, feat_bucket_stream_path)\n                print(f'Upload success!\
+          \ Object saved as {feat_bucket_stream_path}')\n            except Exception\
+          \ as e:\n                print(f'Upload failed: {e}')\n\n    else:\n   \
+          \     err_msg = \"Data stream not found! Cannot proceed.\"\n        print(err_msg)\n\
+          \        sys.exit(err_msg)\n\n"
+        image: maulanaysfi/python-kfp:0.2
+    exec-serve-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - serve_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.15.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef serve_model():\n    import boto3, joblib, time, os\n    from\
+          \ pathlib import Path\n\n    s3_access_key_id = os.getenv(\"S3_ACCESS_KEY_ID\"\
+          )\n    s3_secret_access_key = os.getenv(\"S3_SECRET_ACCESS_KEY\")\n    s3_endpointurl\
+          \ = os.getenv(\"S3_ENDPOINT_URL\")\n\n    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id,\
+          \ aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)\n\
+          \n    def recursive_download(bucket, key, local_path):\n        max_retries\
+          \ = 5\n        for attempt in range(1, max_retries + 1):\n            try:\n\
+          \                s3.download_file(bucket, key, local_path)\n           \
+          \     print(f\"Download success!. Saved as: {local_path}\")\n          \
+          \      break\n            except Exception as e:\n                print(f\"\
+          Download attempt #{attempt} fail. Error: {e}. Retrying...\")\n         \
+          \       if attempt == max_retries:\n                    print(\"Maximum\
+          \ attempt reached. Download failed.\")\n                else:\n        \
+          \            time.sleep(2)\n\n    def download_latest_file(bucket, prefix,\
+          \ local_path):\n        \"\"\"\n        Download the latest object under\
+          \ a folder prefix.\n        \"\"\"\n        try:\n            response =\
+          \ s3.list_objects_v2(\n                Bucket=bucket,\n                Prefix=prefix\n\
+          \            )\n\n            if 'Contents' not in response:\n         \
+          \       print(f\"Folder '{prefix}' in bucket '{bucket}' is empty or not\
+          \ found!\")\n                return\n\n            all_objects = response['Contents']\n\
+          \n            all_objects.sort(key=lambda obj: obj['LastModified'], reverse=True)\n\
+          \n            latest_object = all_objects[0]\n            latest_key = latest_object['Key']\n\
+          \            latest_modified = latest_object['LastModified']\n\n       \
+          \     file_name = latest_key.split('/')[-1]\n            download_path =\
+          \ f\"{local_path}/{file_name}\"\n\n            print(f\"Latest object found:\
+          \ {latest_key} (last modified: {latest_modified})\")\n\n            recursive_download(bucket,\
+          \ latest_key, download_path)\n\n        except Exception as e:\n       \
+          \     print(f\"An error occured: {e}\")\n\n    # bucket name\n    bucketname\
+          \ = 'datalake'\n\n    # process local path\n    local_path = './p6'\n\n\
+          \    # model path configs\n    model_bucket_prefix = 'models'\n\n    os.makedirs(local_path,\
+          \ exist_ok=True)\n\n    download_latest_file(bucketname, model_bucket_prefix,\
+          \ local_path)\n\n    dir_path = Path(local_path)\n    extension = '.pkl'\n\
+          \    file_pattern = f'*{extension}'\n    all_files = [f for f in dir_path.glob(file_pattern)\
+          \ if f.is_file()]\n\n    if not all_files:\n        print(f\"Folder '{local_path}'\
+          \ is empty or there is no file with '{extension}' extension.\")\n\n    latest_model\
+          \ = max(all_files, key=os.path.getmtime)\n    model = joblib.load(latest_model)\n\
+          \    print(model)\n\n"
+        image: maulanaysfi/python-kfp:0.2
+    exec-train-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.15.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model():\n    import contextlib, io, os, sys, boto3, joblib,\
+          \ time\n    import numpy as np\n    import pandas as pd\n    import seaborn\
+          \ as sns\n    import matplotlib.pyplot as plt\n\n    from botocore.exceptions\
+          \ import ClientError\n    from datetime import datetime\n    from lightgbm\
+          \ import LGBMRegressor\n    from skforecast.direct import ForecasterDirect\n\
+          \    from sklearn.metrics import mean_absolute_error, root_mean_squared_error\n\
+          \    from matplotlib.ticker import FuncFormatter\n    pd.set_option('display.float_format',\
+          \ '{:.2f}'.format)\n\n    s3_access_key_id = os.getenv(\"S3_ACCESS_KEY_ID\"\
+          )\n    s3_secret_access_key = os.getenv(\"S3_SECRET_ACCESS_KEY\")\n    s3_endpointurl\
+          \ = os.getenv(\"S3_ENDPOINT_URL\")\n\n    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id,\
+          \ aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)\n\
+          \n    def recursive_download(bucket, key, local_path):\n        max_retries\
+          \ = 5\n        for attempt in range(1, max_retries + 1):\n            try:\n\
+          \                s3.download_file(bucket, key, local_path)\n           \
+          \     print(f\"Download success!. Saved as: {local_path}\")\n          \
+          \      break\n            except Exception as e:\n                print(f\"\
+          Download attempt #{attempt} fail. Error: {e}. Retrying...\")\n         \
+          \       if attempt == max_retries:\n                    print(\"Maximum\
+          \ attempt reached. Download failed.\")\n                else:\n        \
+          \            time.sleep(2)\n\n    def check_object_exists(s3_client, bucket_name:\
+          \ str, object_key: str) -> bool:\n        \"\"\"\n        Checking whether\
+          \ an object is available or not.\n        \"\"\"\n        max_retries =\
+          \ 5\n\n        for attempt in range(1, max_retries + 1):\n            try:\n\
+          \                s3_client.head_object(Bucket=bucket_name, Key=object_key)\n\
+          \                print(f\"Object '{object_key}' found in bucket '{bucket_name}'.\"\
+          )\n                return True\n\n            except ClientError as e:\n\
+          \                error_code = e.response['Error']['Code']\n\n          \
+          \      if error_code == '404':\n                    print(f\"Object '{object_key}'\
+          \ not found (404).\")\n                    return False\n              \
+          \  elif error_code == '403':\n                    if attempt < max_retries:\n\
+          \                        print(f\"Attempt #{attempt} failed with 403 (Forbidden).\
+          \ Retrying...\")\n                        time.sleep(2)\n              \
+          \          continue\n                    else:\n                       \
+          \ print(f\"Maximum retry attempts ({max_retries}) reached. 403 (Forbidden)\
+          \ error persists.\")\n                        print(f\"Boto3/MinIO error:\
+          \ {e}\")\n                        return False\n                else:\n\
+          \                    print(f\"Boto3/MinIO error: {e}\")\n              \
+          \      return False\n\n            except Exception as e:\n            \
+          \    print(f\"An error occured: {e}\")\n                return False\n\n\
+          \        return False\n\n    def sterling_formatter(i, pos):\n        if\
+          \ i >= 1e6:\n            return f\"\xA3{i*1e-6:.1f} M\"\n        elif i\
+          \ >= 1e3:\n            return f\"\xA3{i*1e-3:.1f} K\"\n        else:\n \
+          \           return f\"\xA3{i:.0f}\"\n\n    current_date = datetime.now().strftime(\"\
+          %Y-%m-%d\")\n\n    # bucket name\n    bucketname = 'datalake'\n\n    # process\
+          \ local path\n    local_path = './p5'\n\n    # model path configs\n    model_name\
+          \ = f'lightgbm_{current_date}.pkl'\n    model_local_path = f'{local_path}/{model_name}'\n\
+          \    model_bucket_path = f'models/{model_name}'\n\n    # report path configs\n\
+          \    report_name = 'model_performance_report.png'\n    report_local_path\
+          \ = f'{local_path}/{report_name}'\n    report_bucket_path = f'reports/{report_name}'\n\
+          \n    # dataset path configs\n    dataset_name = 'online-retail-feature-stream.csv'\n\
+          \    dataset_bucket_path = f'feature/{dataset_name}'\n    dataset_local_path\
+          \ = f'{local_path}/{dataset_name}'\n\n    os.makedirs(local_path, exist_ok=True)\n\
+          \n    if check_object_exists(s3, bucketname, dataset_bucket_path):\n   \
+          \     print('Downloading latest dataset...')\n        recursive_download(bucketname,\
+          \ dataset_bucket_path, dataset_local_path)\n\n        print('Loading data...')\n\
+          \        data = pd.read_csv(dataset_local_path)\n\n        print('Assessing\
+          \ data...\\n')\n        print(data.info(), end=\"\\n\\n\")\n\n        y\
+          \ = data['Sales']\n        exog = data.drop(columns=['DayName','NormDate'])\n\
+          \n        # forecast horizon\n        steps = 50\n\n        # auto lags\
+          \ for 30 days\n        lags = 30\n\n        # rows of data will be used\
+          \ for model training\n        data_size = int(y.count())\n        train_size\
+          \ = round(data_size*80/100)\n        print(f'Data train size: {train_size}')\n\
+          \n        if (train_size < 130):\n            raise SystemExit('Minimal\
+          \ train data size is at least 130 rows!')\n        else:\n            #\
+          \ split data for training and testing\n            y_train, y_test = y[:train_size],\
+          \ y[train_size:]\n            x_train, x_test = exog[:train_size], exog[train_size:]\n\
+          \n        print(f'\\nSteps size: {steps}')\n        print(f'x_test size:\
+          \ {int(x_test['Invoices'].count())}\\n')\n\n        if steps > int(x_test['Invoices'].count()):\n\
+          \            print(\"Steps (forecast horizon) cannot be larger than x_test\
+          \ size!\")\n            print(\"Steps automatically set to maximum possible\
+          \ value.\")\n            steps = int(x_test['Invoices'].count())\n     \
+          \       print(f'\\nSteps size: {steps}')\n        else:\n            print(\"\
+          Steps (forecast horizon) is below or equal to x_test size. You're good to\
+          \ go!\")\n\n        forecaster = ForecasterDirect(\n            regressor=\
+          \ LGBMRegressor(\n                n_estimators=500,\n                learning_rate=0.01,\n\
+          \                subsample=0.9,\n                colsample_bytree=0.9\n\
+          \            ),\n            steps=steps,\n            lags=lags\n     \
+          \   )\n\n        temp_stdout = io.StringIO()\n        with contextlib.redirect_stdout(temp_stdout):\n\
+          \            forecaster.fit(\n                y=y_train,\n             \
+          \   exog=x_train\n            )\n\n        preds = forecaster.predict(\n\
+          \            steps=steps,\n            exog=x_test\n        )\n\n      \
+          \  mae = mean_absolute_error(y_test[:steps], preds)\n        rmse = root_mean_squared_error(y_test[:steps],\
+          \ preds)\n\n        print(f\"MAE : {mae:.2f}\")\n        print(f\"RMSE :\
+          \ {rmse:.2f}\")\n\n        joblib.dump(forecaster, model_local_path)\n\n\
+          \        y_steps = y_test[:steps]\n        y_steps = pd.DataFrame(y_steps)\n\
+          \        y_steps['Pred_Sales'] = preds\n        y_steps.reset_index(inplace=True)\n\
+          \        y_steps = y_steps.rename(columns={\"index\":\"day\"})\n\n     \
+          \   df_observed = pd.DataFrame({\n            \"day\" : np.arange(0, y.count()),\n\
+          \            \"sales\" : y,\n            \"label\" : \"Observed Sales\"\n\
+          \        })\n\n        df_predicted = pd.DataFrame({\n            \"day\"\
+          \ : y_steps['day'],\n            \"sales\" : y_steps['Pred_Sales'],\n  \
+          \          \"label\" : \"Predicted Sales\"\n        })\n\n        df_eval\
+          \ = pd.concat([df_observed[(train_size-30):(y_train.count()+steps)], df_predicted],\
+          \ ignore_index=True)\n\n        plt.figure(figsize=(15,4), dpi=200)\n  \
+          \      sns.lineplot(\n            data=df_eval,\n            x=\"day\",\n\
+          \            y=\"sales\",\n            hue='label',\n            palette={'Observed\
+          \ Sales':'blue', 'Predicted Sales':'red'}\n        )\n        plt.grid(axis=\"\
+          both\", alpha=0.4)\n        plt.suptitle('Observed Sales vs Predicted Sales')\n\
+          \        plt.title(f'Over {steps} days', fontsize=8, loc=\"center\", pad=7,\
+          \ x=0.483)\n        plt.ylabel('Sales (Sterling)')\n        plt.xlabel('Day')\n\
+          \        plt.legend(title=None)\n        plt.axvline(x=train_size, color='green',\
+          \ ls='--', lw='1', alpha=0.4)\n        y_min, y_max = plt.ylim()\n     \
+          \   plt.text(x=train_size+0.5, y=y_max*0.92, s='Model starts to predict\
+          \ here', fontsize='8', alpha=0.5)\n        plt.gca().yaxis.set_major_formatter(FuncFormatter(sterling_formatter))\n\
+          \        plt.savefig(report_local_path)\n        plt.close()\n\n       \
+          \ print('Uploading model and report to bucket...')\n        try:\n     \
+          \       s3.upload_file(model_local_path, bucketname, model_bucket_path)\n\
+          \            print(f'Upload success! Object saved as {model_bucket_path}')\n\
+          \            s3.upload_file(report_local_path, bucketname, report_bucket_path)\n\
+          \            print(f'Upload success! Object saved as {report_bucket_path}')\n\
+          \        except Exception as e:\n            print(f'Upload failed: {e}')\n\
+          \    else:\n        err_msg = \"Dataset not found! Cannot proceed.\"\n \
+          \       print(err_msg)\n        sys.exit(err_msg)\n\n"
+        image: maulanaysfi/python-kfp:0.2
+pipelineInfo:
+  name: end-to-end-ml-workflow
+root:
+  dag:
+    tasks:
+      explore-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-explore-data
+        taskInfo:
+          name: explore-data
+      ingest-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-ingest-data
+        taskInfo:
+          name: ingest-data
+      merge-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-merge-data
+        taskInfo:
+          name: merge-data
+      preprocess-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-preprocess-data
+        taskInfo:
+          name: preprocess-data
+      serve-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-serve-model
+        taskInfo:
+          name: serve-model
+      train-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model
+        taskInfo:
+          name: train-model
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.15.1
