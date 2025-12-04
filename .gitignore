@@ -3,3 +3,4 @@ notebooks/p*
 pipelines/p*
 .env*
 reference*
+__pycache__

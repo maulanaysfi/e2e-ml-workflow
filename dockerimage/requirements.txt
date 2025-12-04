@@ -1,0 +1,16 @@
+boto3
+# os
+pandas
+datetime
+# time
+botocore
+pathlib
+# sys
+matplotlib
+seaborn
+# contextlib
+# io
+joblib
+lightgbm
+skforecast
+scikit-learn
