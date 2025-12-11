@@ -14,3 +14,4 @@ joblib
 lightgbm
 skforecast
 scikit-learn
+requests
