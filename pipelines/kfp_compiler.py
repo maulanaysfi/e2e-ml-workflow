@@ -2,7 +2,7 @@ import os, sys
 from kfp import compiler, dsl
 from kfp.dsl import Dataset, Input, Model, Output, Artifact
 
-image = "maulanaysfi/python-kfp:0.3"
+image = "maulanaysfi/python-kfp:0.31"
 
 @dsl.component(base_image=image)
 def ingest_data(tmp_data: Output[Dataset]):
@@ -80,11 +80,12 @@ def ingest_data(tmp_data: Output[Dataset]):
 
         os.makedirs(local_path, exist_ok=True)
         df.to_csv(tmp_local_path, index=False)
+        # ======== pass dataset to next process =========
+        df.to_csv(tmp_data.path, index=False)
 
         print(f"Data stored as {tmp_local_path}")
-        return df
 
-    df = fetch_and_store_data()
+    fetch_and_store_data()
 
     print(f"Fetching bucket lists...")
     response = s3.list_buckets()
@@ -93,10 +94,6 @@ def ingest_data(tmp_data: Output[Dataset]):
     for bucket in response["Buckets"]:
         print(bucket["Name"])
     print("")
-
-    os.makedirs(local_path, exist_ok=True)
-
-    df.to_csv(tmp_local_path, index=False)
 
     try:
         print(f"Uploading data to S3 storage {bucketname}/{tmp_bucket_path}...")
@@ -462,8 +459,9 @@ def preprocess_data(input_dataset: Input[Dataset], output_feat_dataset: Output[D
         print(df_perday.count())
         df_count = df_perday['NormDate'].count()
         print(f'Current total dataset rows: {df_count}')
-        if df_count <= 200:
-            err_msg = "\nInsufficient dataset rows!\nDataset temporarily won't be proceeded to feature engineering and used for model training.\nProgram exiting!"
+        df_limit = 200
+        if df_count <= df_limit:
+            err_msg = f"\nInsufficient dataset rows! This process requires at least {df_limit} rows of data.\nDataset temporarily won't be proceeded to feature engineering and used for model training.\nProgram exiting!"
             print (err_msg)
             sys.exit(err_msg)
         else:
