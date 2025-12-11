@@ -1,0 +1,13 @@
+## server v1
+#boto3
+#pandas
+#botocore
+#flask
+
+# server v2
+boto3
+botocore
+pandas
+fastapi
+pydantic
+uvicorn

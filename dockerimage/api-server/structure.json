@@ -1,0 +1,18 @@
+{
+  "count": "int, the number of API call count",
+  "list": [
+    {
+      "dt": "datetime, The data's timestamp wrote in YYYYMMDD",
+      "main": {
+        "StockCode": "int, data 1",
+        "Description": "str, data 2",
+        "Quantity": "int, data 3",
+        "InvoiceDate": "datetime, data 4",
+        "Country": "str, data 5",
+        "UnitPrice": "int, data 6",
+        "InvoiceNo": "int, data 7",
+        "CustomerID": "int, data 8"
+      }
+    }
+  ]
+}
