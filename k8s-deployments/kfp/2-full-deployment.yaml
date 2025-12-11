@@ -818,7 +818,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  defaultPipelineRoot: ""
+  defaultPipelineRoot: "minio://mlpipeline/artifacts"
 kind: ConfigMap
 metadata:
   labels:
