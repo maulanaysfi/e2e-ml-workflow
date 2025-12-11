@@ -6,69 +6,105 @@ image = "maulanaysfi/python-kfp:0.3"
 
 @dsl.component(base_image=image)
 def ingest_data(tmp_data: Output[Dataset]):
-    import boto3, os, time
+    # data ingesting and storing
+    import os
+    import boto3
+    import requests
+
     import pandas as pd
     from datetime import datetime
 
-    s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
-    s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
-    s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
-
-    s3 = boto3.client(
-        "s3",
-        aws_access_key_id=s3_access_key_id,
-        aws_secret_access_key=s3_secret_access_key,
-        endpoint_url=s3_endpointurl,
-    )
-    response = s3.list_buckets()
-
-    print("Found bucket(s):")
-    for bucket in response["Buckets"]:
-        print(bucket["Name"])
-    print("")
-    
-    def recursive_download(bucket, key, local_path):
-        max_retries = 5
-        for attempt in range(1, max_retries + 1):
-            try:
-                s3.download_file(bucket, key, local_path)
-                print(f"Download success!. Saved as: {local_path}")
-                break
-            except Exception as e:
-                print(f"Download attempt #{attempt} fail. Error: {e}. Retrying...")
-                if attempt == max_retries:
-                    print("Maximum attempt reached. Download failed.")
-                else:
-                    time.sleep(2)
+    API_URL = "https://data-api.maulanaysfi.my.id/data"
 
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     bucketname = "datalake"
     local_path = "/tmp"
     tmp_name = f"tmp-dataset-{current_time}.csv"
-    tmp_local_path = f"{local_path}/{tmp_name}"
+    tmp_local_path = os.path.join(local_path, tmp_name)
     tmp_bucket_path = f"tmp/{tmp_name}"
-    raw_name = "online-retail-full.csv"
-    raw_local_path = f"{local_path}/{raw_name}"
-    raw_bucket_path = f"raw/{raw_name}"
+
+    s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
+    s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
+    s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
+
+    if s3_access_key_id is None:
+        raise ValueError(
+            "Please set S3 credentials to your environment variables to proceed!."
+        )
+    else:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_access_key,
+            endpoint_url=s3_endpointurl,
+        )
+
+
+    def fetch_and_store_data():
+        print(f"Calling API: {API_URL}...")
+
+        try:
+            response = requests.get(API_URL)
+            response.raise_for_status()
+            data_json = response.json()
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error while calling API: {e}")
+            return
+
+        if "list" not in data_json or "count" not in data_json:
+            print(
+                "Error: JSON response structure is no valid. Key 'list' or 'count' not found."
+            )
+            return
+
+        data_list = data_json["list"]
+        record_count = data_json["count"]
+
+        if record_count == 0:
+            print("Retrieved 0 record from API. No CSV is loaded.")
+            return
+
+        print(f"Successfully retrieved {record_count} record(s).")
+
+        flattened_data = []
+        for item in data_list:
+            flat_record = item["main"]
+            flat_record["dt"] = item["dt"]
+
+            flattened_data.append(flat_record)
+
+        df = pd.DataFrame(flattened_data)
+        df.drop(columns='dt', inplace=True)
+
+        os.makedirs(local_path, exist_ok=True)
+        df.to_csv(tmp_local_path, index=False)
+
+        print(f"Data stored as {tmp_local_path}")
+        return df
+
+    df = fetch_and_store_data()
+
+    print(f"Fetching bucket lists...")
+    response = s3.list_buckets()
+
+    print("Found bucket(s):")
+    for bucket in response["Buckets"]:
+        print(bucket["Name"])
+    print("")
 
     os.makedirs(local_path, exist_ok=True)
 
-    recursive_download(bucketname, raw_bucket_path, raw_local_path)
-
-    df = pd.read_csv(raw_local_path)
-    df = df[:300000]
-
-    # print(df.count())
-
     df.to_csv(tmp_local_path, index=False)
-    df.to_csv(tmp_data.path, index=False)
 
     try:
+        print(f"Uploading data to S3 storage {bucketname}/{tmp_bucket_path}...")
         s3.upload_file(tmp_local_path, bucketname, tmp_bucket_path)
         print(f"Upload success! Object saved as {tmp_bucket_path}")
     except Exception as e:
         print(f"Upload failed: {e}")
+
 
 @dsl.component(base_image=image)
 def merge_data(input_tmp_data: Input[Dataset], output_dataset: Output[Dataset]):
@@ -81,7 +117,17 @@ def merge_data(input_tmp_data: Input[Dataset], output_dataset: Output[Dataset]):
     s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
     s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
 
-    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id, aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)
+    if s3_access_key_id is None:
+        raise ValueError(
+            "Please set S3 credentials to your environment variables to proceed!."
+        )
+    else:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_access_key,
+            endpoint_url=s3_endpointurl,
+        )
 
     def recursive_download(bucket, key, local_path):
         max_retries = 5
@@ -250,7 +296,17 @@ def preprocess_data(input_dataset: Input[Dataset], output_feat_dataset: Output[D
     s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
     s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
 
-    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id, aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)
+    if s3_access_key_id is None:
+        raise ValueError(
+            "Please set S3 credentials to your environment variables to proceed!."
+        )
+    else:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_access_key,
+            endpoint_url=s3_endpointurl,
+        )
 
     def recursive_download(bucket, key, local_path):
         max_retries = 5
@@ -505,7 +561,17 @@ def explore_data(input_feat_dataset: Input[Dataset], sales_per_year_png: Output[
     s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
     s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
 
-    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id, aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)
+    if s3_access_key_id is None:
+        raise ValueError(
+            "Please set S3 credentials to your environment variables to proceed!."
+        )
+    else:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_access_key,
+            endpoint_url=s3_endpointurl,
+        )
 
     def recursive_download(bucket, key, local_path):
         max_retries = 5
@@ -697,7 +763,17 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
     s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
     s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
 
-    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id, aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)
+    if s3_access_key_id is None:
+        raise ValueError(
+            "Please set S3 credentials to your environment variables to proceed!."
+        )
+    else:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_access_key,
+            endpoint_url=s3_endpointurl,
+        )
 
     def recursive_download(bucket, key, local_path):
         max_retries = 5
@@ -923,8 +999,18 @@ def serve_model(input_model: Input[Model]):
     s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
     s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
     s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
-
-    s3 = boto3.client('s3', aws_access_key_id=s3_access_key_id, aws_secret_access_key=s3_secret_access_key, endpoint_url=s3_endpointurl)
+    
+    if s3_access_key_id is None:
+        raise ValueError(
+            "Please set S3 credentials to your environment variables to proceed!."
+        )
+    else:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=s3_access_key_id,
+            aws_secret_access_key=s3_secret_access_key,
+            endpoint_url=s3_endpointurl,
+        )
 
     def recursive_download(bucket, key, local_path):
         max_retries = 5
@@ -1014,26 +1100,32 @@ else:
         first_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         first_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         first_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        first_op.set_caching_options(False)
         second_op = merge_data(input_tmp_data=first_op.outputs['tmp_data'])
         second_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         second_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         second_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        second_op.set_caching_options(False)
         third_op = preprocess_data(input_dataset=second_op.outputs['output_dataset'])
         third_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         third_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         third_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        third_op.set_caching_options(False)
         fourth_op = explore_data(input_feat_dataset=third_op.outputs['output_feat_dataset'])
         fourth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         fourth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         fourth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        fourth_op.set_caching_options(False)
         fifth_op = train_model(input_feat_dataset=third_op.outputs['output_feat_dataset'])
         fifth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         fifth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         fifth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        fifth_op.set_caching_options(False)
         sixth_op = serve_model(input_model=fifth_op.outputs['output_model'])
         sixth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         sixth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         sixth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        sixth_op.set_caching_options(False)
 
     # compiling the pipeline
     if __name__ == "__main__":
