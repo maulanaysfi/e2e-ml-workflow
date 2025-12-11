@@ -74,8 +74,8 @@ file_pattern = f'*{extension}'
 all_files = [f for f in dir_path.glob(file_pattern) if f.is_file()]
 
 if not all_files:
-    print(f"Folder '{local_path}' is empty or there is no file with '{extension}' extension.")
-    
-latest_model = max(all_files, key=os.path.getmtime)
-model = joblib.load(latest_model)
-print(model)
+    print(f"Local folder '{local_path}' is empty or there is no model file with '{extension}' extension found.")
+else:
+    latest_model = max(all_files, key=os.path.getmtime)
+    model = joblib.load(latest_model)
+    print(model)

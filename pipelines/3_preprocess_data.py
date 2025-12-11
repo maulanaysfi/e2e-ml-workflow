@@ -241,5 +241,4 @@ if check_object_exists(s3, bucketname, bucket_stream_path):
 
 else:
     err_msg = "Data stream not found! Cannot proceed."
-    print(err_msg)
     sys.exit(err_msg)

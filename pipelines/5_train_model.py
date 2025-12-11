@@ -228,5 +228,4 @@ if check_object_exists(s3, bucketname, dataset_bucket_path):
         print(f'Upload failed: {e}')
 else:
     err_msg = "Dataset not found! Cannot proceed."
-    print(err_msg)
     sys.exit(err_msg)
