@@ -2,7 +2,7 @@ import os, sys
 from kfp import compiler, dsl
 from kfp.dsl import Dataset, Input, Model, Output, Artifact
 
-image = "maulanaysfi/python-kfp:0.31"
+image = "maulanaysfi/python-kfp:0.3.2"
 
 @dsl.component(base_image=image)
 def ingest_data(tmp_data: Output[Dataset]):
@@ -1022,7 +1022,7 @@ spec:
             mountPath: /mnt/models
             readOnly: False
     containers:
-      - image: docker.io/maulanaysfi/model-runtime:0.2.1
+      - image: docker.io/maulanaysfi/model-runtime:0.2.2
         name: model-runtime
         resources:
           requests:

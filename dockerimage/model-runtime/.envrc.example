@@ -1,0 +1,1 @@
+export MODEL_PATH=/home/user/models/your-model-name.pkl

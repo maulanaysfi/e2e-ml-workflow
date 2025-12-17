@@ -17,7 +17,7 @@ spec:
         app: data-api
     spec:
       containers:
-        - image: maulanaysfi/dummy-api-server:0.1
+        - image: maulanaysfi/dummy-api-server:0.1.1
           name: data-api-server
           imagePullPolicy: Always
           env:
@@ -62,16 +62,6 @@ spec:
               port: 5000
             initialDelaySeconds: 3
             periodSeconds: 3
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: data-api-s3-credentials
-  namespace: default
-stringData:
-  accesskey: kfp
-  secretkey: wazowski
-  endpointurl: https://minio.maulanaysfi.my.id
 ---
 apiVersion: v1
 kind: ConfigMap

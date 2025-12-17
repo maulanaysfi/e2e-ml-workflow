@@ -1,5 +1,5 @@
-from kubernetes import client, config
 import yaml
+from kubernetes import client, config
 
 raw_isvc = """
 apiVersion: "serving.kserve.io/v1beta1"
@@ -30,7 +30,7 @@ spec:
             mountPath: /mnt/models
             readOnly: False
     containers:
-      - image: docker.io/maulanaysfi/model-runtime:0.2.1
+      - image: docker.io/maulanaysfi/model-runtime:0.2.2
         name: model-runtime
         resources:
           requests:
@@ -75,7 +75,8 @@ spec:
     scaleMetric: cpu
 """
 
-config.load_incluster_config()
+# config.load_incluster_config()
+config.load_kube_config("/home/ibrahim/.kube/config")
 api = client.CustomObjectsApi()
 
 GROUP = "serving.kserve.io"

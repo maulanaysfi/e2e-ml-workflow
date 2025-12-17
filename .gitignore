@@ -1,7 +1,8 @@
 .ipynb_checkpoints/
 notebooks/p*
 pipelines/p*
-.env*
+.env
+.envrc
 reference*
 __pycache__
 kubeflow_pipeline.yaml

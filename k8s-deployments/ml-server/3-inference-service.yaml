@@ -26,7 +26,7 @@ spec:
             mountPath: /mnt/models
             readOnly: False
     containers:
-      - image: docker.io/maulanaysfi/model-runtime:0.2.1
+      - image: docker.io/maulanaysfi/model-runtime:0.2.2
         name: model-runtime
         resources:
           requests:

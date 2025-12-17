@@ -1,0 +1,5 @@
+export S3_ACCESS_KEY_ID=username
+export S3_SECRET_ACCESS_KEY=password
+export S3_ENDPOINT_URL=https://your.minio-endpoint.com
+export CONFIG_START_DATE_STR="2009-12-01"
+export CONFIG_END_DATE_STR="2009-12-10"

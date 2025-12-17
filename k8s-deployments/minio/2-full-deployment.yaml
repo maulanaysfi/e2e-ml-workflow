@@ -77,15 +77,6 @@ spec:
             claimName: minio-pvc
 ---
 apiVersion: v1
-kind: Secret
-metadata:
-  name: minio-root-credentials
-  namespace: minio
-stringData:
-  accesskey: kfp
-  secretkey: wazowski
----
-apiVersion: v1
 kind: Service
 metadata:
   name: minio
