@@ -64,6 +64,7 @@ def ingest_data(tmp_data: Output[Dataset]):
 
         if record_count == 0:
             print("Retrieved 0 record from API. No CSV is loaded.")
+            raise SystemExit("No data is fetched! Make sure data API server is running or URL is correct.")
             return
 
         print(f"Successfully retrieved {record_count} record(s).")
@@ -750,7 +751,6 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
     import matplotlib.pyplot as plt
 
     from botocore.exceptions import ClientError
-    from datetime import datetime
     from lightgbm import LGBMRegressor
     from skforecast.direct import ForecasterDirect
     from sklearn.metrics import mean_absolute_error, root_mean_squared_error
@@ -832,8 +832,6 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
         else:
             return f"£{i:.0f}"
 
-    current_date = datetime.now().strftime("%Y-%m-%d")
-
     # bucket name
     bucketname = 'datalake'
 
@@ -841,7 +839,7 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
     local_path = '/tmp'
 
     # model path configs
-    model_name = f'lightgbm_{current_date}.pkl'
+    model_name = f'lightgbm.pkl'
     model_local_path = f'{local_path}/{model_name}'
     model_bucket_path = f'models/{model_name}'
 
@@ -989,99 +987,127 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
         print(err_msg)
         sys.exit(err_msg)
 
-@dsl.component(base_image=image)
+@dsl.component(base_image="python:3.13.7-alpine", packages_to_install=["kubernetes"])
 def serve_model(input_model: Input[Model]):
-    import boto3, joblib, time, os
-    from pathlib import Path
+    from kubernetes import client, config
+    import yaml
 
-    s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
-    s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
-    s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
-    
-    if s3_access_key_id is None:
-        raise ValueError(
-            "Please set S3 credentials to your environment variables to proceed!."
+    raw_isvc = """
+apiVersion: "serving.kserve.io/v1beta1"
+kind: "InferenceService"
+metadata:
+  name: "lgbm-sales-pred"
+  namespace: kserve
+  annotations:
+    serving.kserve.io/deploymentMode: "RawDeployment"
+spec:
+  predictor:
+    initContainers:
+      - image: rclone/rclone:master
+        name: fetch-model
+        args:
+          - "copy"
+          - "s3:datalake/models/lightgbm.pkl"
+          - "/mnt/models"
+          - "--update"
+        envFrom:
+          - secretRef:
+              name: s3-secret
+        volumeMounts:
+          - name: rclone-conf
+            mountPath: /config/rclone/
+            readOnly: True
+          - name: model-pvc
+            mountPath: /mnt/models
+            readOnly: False
+    containers:
+      - image: docker.io/maulanaysfi/model-runtime:0.2.1
+        name: model-runtime
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 1Gi
+        env:
+          - name: MODEL_PATH
+            valueFrom:
+              configMapKeyRef:
+                name: lgbm-sales-pred-config
+                key: model-path
+        ports:
+          - name: http
+            containerPort: 5001
+            protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+          - name: model-pvc
+            mountPath: /mnt/models
+            readOnly: False
+    volumes:
+      - name: rclone-conf
+        configMap:
+          name: lgbm-sales-pred-config
+          items:
+            - key: rclone.conf
+              path: rclone.conf
+      - name: model-pvc
+        persistentVolumeClaim:
+          claimName: lgbm-sales-pred-model
+    minReplicas: 0
+    maxReplicas: 5
+    scaleTarget: 150
+    scaleMetric: cpu
+"""
+
+    config.load_incluster_config()
+    api = client.CustomObjectsApi()
+
+    GROUP = "serving.kserve.io"
+    VERSION = "v1beta1"
+    PLURAL = "inferenceservices"
+    NAMESPACE = "kserve"
+
+    isvc = yaml.safe_load(raw_isvc)
+    name = isvc["metadata"]["name"]
+
+    try:
+        api.get_namespaced_custom_object(
+            group=GROUP,
+            version=VERSION,
+            namespace=NAMESPACE,
+            plural=PLURAL,
+            name=name,
         )
-    else:
-        s3 = boto3.client(
-            "s3",
-            aws_access_key_id=s3_access_key_id,
-            aws_secret_access_key=s3_secret_access_key,
-            endpoint_url=s3_endpointurl,
+
+        api.patch_namespaced_custom_object(
+            group=GROUP,
+            version=VERSION,
+            namespace=NAMESPACE,
+            plural=PLURAL,
+            name=name,
+            body=isvc,
         )
+        print(f"InferenceService '{name}' patched.")
 
-    def recursive_download(bucket, key, local_path):
-        max_retries = 5
-        for attempt in range(1, max_retries + 1):
-            try:
-                s3.download_file(bucket, key, local_path)
-                print(f"Download success!. Saved as: {local_path}")
-                break
-            except Exception as e:
-                print(f"Download attempt #{attempt} fail. Error: {e}. Retrying...")
-                if attempt == max_retries:
-                    print("Maximum attempt reached. Download failed.")
-                else:
-                    time.sleep(2)
-
-    def download_latest_file(bucket, prefix, local_path):
-        """
-        Download the latest object under a folder prefix.
-        """
-        try:
-            response = s3.list_objects_v2(
-                Bucket=bucket,
-                Prefix=prefix
+    except client.exceptions.ApiException as e:
+        if e.status == 404:
+            api.create_namespaced_custom_object(
+                group=GROUP,
+                version=VERSION,
+                namespace=NAMESPACE,
+                plural=PLURAL,
+                body=isvc,
             )
-
-            if 'Contents' not in response:
-                print(f"Folder '{prefix}' in bucket '{bucket}' is empty or not found!")
-                return
-
-            all_objects = response['Contents']
-            
-            all_objects.sort(key=lambda obj: obj['LastModified'], reverse=True)
-            
-            latest_object = all_objects[0]
-            latest_key = latest_object['Key']
-            latest_modified = latest_object['LastModified']
-
-            file_name = latest_key.split('/')[-1]
-            download_path = f"{local_path}/{file_name}"
-            
-            print(f"Latest object found: {latest_key} (last modified: {latest_modified})")
-
-            recursive_download(bucket, latest_key, download_path)
-
-        except Exception as e:
-            print(f"An error occured: {e}")
-
-    # bucket name
-    bucketname = 'datalake'
-
-    # process local path
-    local_path = '/tmp'
-
-    # model path configs
-    model_bucket_prefix = 'models'
-
-    os.makedirs(local_path, exist_ok=True)
-
-    download_latest_file(bucketname, model_bucket_prefix, local_path)
-
-    dir_path = Path(local_path)
-    extension = '.pkl'
-    file_pattern = f'*{extension}'
-    all_files = [f for f in dir_path.glob(file_pattern) if f.is_file()]
-
-    if not all_files:
-        print(f"Folder '{local_path}' is empty or there is no file with '{extension}' extension.")
-        
-    latest_model = max(all_files, key=os.path.getmtime)
-    # ======== model injected with built-in kubeflow dataset flow. =======
-    # model = joblib.load(latest_model)
-    model = joblib.load(input_model.path)
-    print(model)
+            print(f"InferenceService '{name}' created.")
+        else:
+            raise
 
 s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
 s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
@@ -1120,9 +1146,6 @@ else:
         fifth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
         fifth_op.set_caching_options(False)
         sixth_op = serve_model(input_model=fifth_op.outputs['output_model'])
-        sixth_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
-        sixth_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
-        sixth_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
         sixth_op.set_caching_options(False)
 
     # compiling the pipeline

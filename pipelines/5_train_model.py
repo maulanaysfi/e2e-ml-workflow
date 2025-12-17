@@ -7,7 +7,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from botocore.exceptions import ClientError
-from datetime import datetime
 from lightgbm import LGBMRegressor
 from skforecast.direct import ForecasterDirect
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error
@@ -79,8 +78,6 @@ def sterling_formatter(i, pos):
     else:
         return f"£{i:.0f}"
 
-current_date = datetime.now().strftime("%Y-%m-%d")
-
 # bucket name
 bucketname = 'datalake'
 
@@ -88,7 +85,7 @@ bucketname = 'datalake'
 local_path = './p5'
 
 # model path configs
-model_name = f'lightgbm_{current_date}.pkl'
+model_name = f'lightgbm.pkl'
 model_local_path = f'{local_path}/{model_name}'
 model_bucket_path = f'models/{model_name}'
 
