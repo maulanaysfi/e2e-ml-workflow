@@ -900,11 +900,12 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
             print("Steps (forecast horizon) is below or equal to x_test size. You're good to go!")
 
         forecaster = ForecasterDirect(
-            regressor= LGBMRegressor(
+            estimator= LGBMRegressor(
                 n_estimators=500,
                 learning_rate=0.01,
                 subsample=0.9,
-                colsample_bytree=0.9
+                colsample_bytree=0.9,
+                random_state=5579
             ),
             steps=steps,
             lags=lags

@@ -1,17 +1,12 @@
-boto3
-# os
-pandas
+boto3==1.40.70
+pandas==2.3.3
 datetime
-# time
-botocore
-pathlib
-# sys
-matplotlib
-seaborn
-# contextlib
-# io
-joblib
-lightgbm
-skforecast
-scikit-learn
-requests
+botocore==1.40.70
+pathlib==1.0.1
+matplotlib==3.10.7
+seaborn==0.13.2
+joblib==1.5.2
+lightgbm==4.6.0
+skforecast==0.19.1
+scikit-learn==1.7.2
+requests==2.32.5
