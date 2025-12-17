@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "lgbm-sales-pred-model"
+  namespace: kserve
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 4Gi
+  storageClassName: nfs-sep
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lgbm-sales-pred-config
+  namespace: kserve
+data:
+  rclone.conf: |
+    [s3]
+    type = s3
+    provider = Minio
+    env_auth = true
+  model-path: /mnt/models/lightgbm.pkl
