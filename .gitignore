@@ -7,3 +7,4 @@ reference*
 __pycache__
 kubeflow_pipeline.yaml
 *.pkl
+model-test/
