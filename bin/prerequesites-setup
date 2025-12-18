@@ -29,7 +29,7 @@ for context in $contexts; do
     printf "[+] Done installing Local Path Provisioner on $context!\n\n"
 
     echo "[!] Installing Metallb Native on $context..."
-    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml --context $context 2>&1 | sed 's/^/[*] /'
+    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/config/manifests/metallb-native.yaml --context $context 2>&1 | sed 's/^/[*] /'
     printf "[+] Done installing MetalLB Native on $context!\n\n"
 
 #    echo "[!] Installing Kubernetes Gateway API CRD on $context..."
