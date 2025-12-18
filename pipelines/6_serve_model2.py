@@ -1,6 +1,12 @@
+from datetime import datetime, timezone
+
 import yaml
 from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
 
+# ==============================================
+# ===== inferenceService raw YAML manifest =====
+# ==============================================
 raw_isvc = """
 apiVersion: "serving.kserve.io/v1beta1"
 kind: "InferenceService"
@@ -75,38 +81,43 @@ spec:
     scaleMetric: cpu
 """
 
+# ===========================
+# ===== load kubeconfig =====
+# ===========================
 # config.load_incluster_config()
 config.load_kube_config("/home/ibrahim/.kube/config")
 api = client.CustomObjectsApi()
 
+# ===========================
+# ===== manifest config =====
+# ===========================
+isvc = yaml.safe_load(raw_isvc)
+NAME = isvc["metadata"]["name"]
 GROUP = "serving.kserve.io"
 VERSION = "v1beta1"
 PLURAL = "inferenceservices"
 NAMESPACE = "kserve"
 
-isvc = yaml.safe_load(raw_isvc)
-name = isvc["metadata"]["name"]
+isvc["metadata"].setdefault("annotations", {})
+isvc["metadata"]["annotations"]["rollout.kserve.io/restartedAt"] = datetime.now(
+    timezone.utc
+).isoformat()
 
+# =============================
+# ===== applying manifest =====
+# =============================
 try:
-    api.get_namespaced_custom_object(
-        group=GROUP,
-        version=VERSION,
-        namespace=NAMESPACE,
-        plural=PLURAL,
-        name=name,
-    )
-
     api.patch_namespaced_custom_object(
         group=GROUP,
         version=VERSION,
         namespace=NAMESPACE,
         plural=PLURAL,
-        name=name,
+        name=NAME,
         body=isvc,
     )
-    print(f"InferenceService '{name}' patched.")
+    print(f"InferenceService '{NAME}' patched. (pod(s) should be rolled)")
 
-except client.exceptions.ApiException as e:
+except ApiException as e:
     if e.status == 404:
         api.create_namespaced_custom_object(
             group=GROUP,
@@ -115,6 +126,6 @@ except client.exceptions.ApiException as e:
             plural=PLURAL,
             body=isvc,
         )
-        print(f"InferenceService '{name}' created.")
+        print(f"InferenceService '{NAME}' created.")
     else:
         raise

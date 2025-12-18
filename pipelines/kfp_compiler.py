@@ -990,9 +990,15 @@ def train_model(input_feat_dataset: Input[Dataset], output_model: Output[Model])
 
 @dsl.component(base_image="python:3.13.7-alpine", packages_to_install=["kubernetes"])
 def serve_model(input_model: Input[Model]):
-    from kubernetes import client, config
+    from datetime import datetime, timezone
+    
     import yaml
-
+    from kubernetes import client, config
+    from kubernetes.client.exceptions import ApiException
+    
+    # ==============================================
+    # ===== inferenceService raw YAML manifest =====
+    # ==============================================
     raw_isvc = """
 apiVersion: "serving.kserve.io/v1beta1"
 kind: "InferenceService"
@@ -1065,39 +1071,44 @@ spec:
     maxReplicas: 5
     scaleTarget: 150
     scaleMetric: cpu
-"""
-
+    """
+    
+    # ===========================
+    # ===== load kubeconfig =====
+    # ===========================
     config.load_incluster_config()
     api = client.CustomObjectsApi()
-
+    
+    # ===========================
+    # ===== manifest config =====
+    # ===========================
+    isvc = yaml.safe_load(raw_isvc)
+    NAME = isvc["metadata"]["name"]
     GROUP = "serving.kserve.io"
     VERSION = "v1beta1"
     PLURAL = "inferenceservices"
     NAMESPACE = "kserve"
-
-    isvc = yaml.safe_load(raw_isvc)
-    name = isvc["metadata"]["name"]
-
+    
+    isvc["metadata"].setdefault("annotations", {})
+    isvc["metadata"]["annotations"]["rollout.kserve.io/restartedAt"] = datetime.now(
+        timezone.utc
+    ).isoformat()
+    
+    # =============================
+    # ===== applying manifest =====
+    # =============================
     try:
-        api.get_namespaced_custom_object(
-            group=GROUP,
-            version=VERSION,
-            namespace=NAMESPACE,
-            plural=PLURAL,
-            name=name,
-        )
-
         api.patch_namespaced_custom_object(
             group=GROUP,
             version=VERSION,
             namespace=NAMESPACE,
             plural=PLURAL,
-            name=name,
+            name=NAME,
             body=isvc,
         )
-        print(f"InferenceService '{name}' patched.")
-
-    except client.exceptions.ApiException as e:
+        print(f"InferenceService '{NAME}' patched. (pod(s) should be rolled)")
+    
+    except ApiException as e:
         if e.status == 404:
             api.create_namespaced_custom_object(
                 group=GROUP,
@@ -1106,9 +1117,10 @@ spec:
                 plural=PLURAL,
                 body=isvc,
             )
-            print(f"InferenceService '{name}' created.")
+            print(f"InferenceService '{NAME}' created.")
         else:
             raise
+
 
 s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
 s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
