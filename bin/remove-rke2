@@ -1,7 +1,8 @@
 #!/bin/bash
 
 #AGENTS_STRING="10.10.3.251,10.10.3.252,10.10.3.253,"
-AGENTS_STRING="debian12-node1,debian12-node2,debian12-node3"
+#AGENTS_STRING="debian12-node1,debian12-node2,debian12-node3"
+AGENTS_STRING="vm1, vm2, vm3"
 IFS=',' read -ra AGENTS_ARR <<< "${AGENTS_STRING}"
 
 for AGENT in "${AGENTS_ARR[@]}"; do

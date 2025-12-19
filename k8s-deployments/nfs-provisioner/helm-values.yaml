@@ -1,5 +1,5 @@
 nfs:
-  server: 10.140.0.7
+  server: 10.10.51.233
   path: /shared/nfs
 
 storageClass:
