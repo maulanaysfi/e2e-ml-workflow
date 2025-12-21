@@ -977,7 +977,7 @@ data:
   artifactRepository: |
     archiveLogs: true
     s3:
-      endpoint: "minio.minio:9000"
+      endpoint: "minio.minio.svc.cluster.local:9000"
       bucket: "mlpipeline"
       # keyFormat is a format pattern to define how artifacts will be organized in a bucket.
       # It can reference workflow metadata variables such as workflow.namespace, workflow.name,
@@ -1178,6 +1178,7 @@ spec:
   resources:
     requests:
       storage: 20Gi
+  storageClassName: nfs-sep
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -1550,7 +1551,7 @@ spec:
                   key: bucketName
                   name: pipeline-install-config
             - name: OBJECTSTORECONFIG_HOST
-              value: minio.minio
+              value: minio.minio.svc.cluster.local
             - name: OBJECTSTORECONFIG_PORT
               value: "9000"
             - name: DBCONFIG_USER

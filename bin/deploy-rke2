@@ -33,8 +33,9 @@ mkdir -vp /etc/rancher/rke2/
 cat <<EOF > /etc/rancher/rke2/config.yaml
 cluster-cidr: 10.51.0.0/16
 service-cidr: 10.52.0.0/16
-cluster-dns: 10.52.0.10
+cluster-dns: 10.52.0.53
 tls-san: ${SERVER},cluster1,\${HOSTNAME}
+cni: flannel
 EOF
 
 curl -sfL https://get.rke2.io | sh -

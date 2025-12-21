@@ -14,7 +14,8 @@ def ingest_data(tmp_data: Output[Dataset]):
     import pandas as pd
     from datetime import datetime
 
-    API_URL = "https://data-api.maulanaysfi.my.id/data"
+    # API_URL = "https://data-api.maulanaysfi.my.id/data"
+    API_URL = str(f'{os.getenv("DATA_API_SERVER_URL")}/data')
 
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -1125,6 +1126,7 @@ spec:
 s3_access_key_id = os.getenv("S3_ACCESS_KEY_ID")
 s3_secret_access_key = os.getenv("S3_SECRET_ACCESS_KEY")
 s3_endpointurl = os.getenv("S3_ENDPOINT_URL")
+data_api_server_url = os.getenv("DATA_API_SERVER_URL")
 
 if str(s3_access_key_id) == 'None':
     err = 'Please set S3 credentials to your environment variables to proceed!\nKF pipeline compile canceled.\n'
@@ -1137,6 +1139,7 @@ else:
         first_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)
         first_op.set_env_variable('S3_SECRET_ACCESS_KEY', s3_secret_access_key)
         first_op.set_env_variable('S3_ENDPOINT_URL', s3_endpointurl)
+        first_op.set_env_variable('DATA_API_SERVER_URL', data_api_server_url)
         first_op.set_caching_options(False)
         second_op = merge_data(input_tmp_data=first_op.outputs['tmp_data'])
         second_op.set_env_variable('S3_ACCESS_KEY_ID', s3_access_key_id)

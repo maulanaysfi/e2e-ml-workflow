@@ -99,10 +99,10 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
-  tls:
-    - hosts:
-        - data-api.maulanaysfi.my.id
-      secretName: data-api-ing-tls
+  #  tls:
+  #    - hosts:
+  #        - data-api.maulanaysfi.my.id
+  #      secretName: data-api-ing-tls
   rules:
     - host: data-api.maulanaysfi.my.id
       http:
