@@ -38,6 +38,7 @@ spec:
   schedule: "15,45 * * * *"
   timeZone: "Asia/Jakarta"
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
   jobTemplate:
     spec:
       template:

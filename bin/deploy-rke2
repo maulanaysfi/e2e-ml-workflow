@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # ==== set variables here ====
-REMOTE_USER="too"
+REMOTE_USER="root"
 REMOTE_HOME_DIR="/home/${REMOTE_USER}"
 SERVER="vm1"
 SERVER_INTERNAL_IP="10.10.51.231"
@@ -28,7 +28,7 @@ echo "[!] Deploying RKE2 Server..."
 #AGENTS_STRING=("35.206.252.187,35.206.237.7")
 
 echo -e "[!] Deploying RKE2 server on ${SERVER}...\n"
-ssh -o StrictHostKeyChecking=no -T root@${SERVER} <<EOSSH
+ssh -o StrictHostKeyChecking=accept-new -T root@${SERVER} <<EOSSH
 mkdir -vp /etc/rancher/rke2/
 cat <<EOF > /etc/rancher/rke2/config.yaml
 cluster-cidr: 10.51.0.0/16
@@ -46,7 +46,7 @@ cp -v /etc/rancher/rke2/rke2.yaml ${REMOTE_HOME_DIR}/.kube/config
 chown -v ${REMOTE_USER}:${REMOTE_USER} -R ${REMOTE_HOME_DIR}/.kube
 EOSSH
 
-TOKEN=$(ssh -o StrictHostKeyChecking=no -T root@${SERVER} rke2 token create --ttl 1h)
+TOKEN=$(ssh -o StrictHostKeyChecking=accept-new -T root@${SERVER} rke2 token create --ttl 1h)
 echo "[!] RKE2 Token: ${TOKEN}"
 echo -e "[+] Done Deploying!\n"
 
@@ -56,9 +56,9 @@ IFS=',' read -ra AGENTS_ARR <<< "${AGENTS_STRING}"
 
 if [ ${#AGENTS_ARR[@]} -eq 0 ]; then
     echo "[!] No agent address set." >&2
-    REMOTE_HOSTNAME=$(ssh -o StrictHostKeyChecking=no -T ${REMOTE_USER}@${SERVER} hostname)
+    REMOTE_HOSTNAME=$(ssh -o StrictHostKeyChecking=accept-new -T ${REMOTE_USER}@${SERVER} hostname)
     echo "[!] Retrieving kubeconfig from RKE2 Server node..."
-    scp -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER}:${REMOTE_HOME_DIR}/.kube/config ${HOME}/.kube/config
+    scp -o StrictHostKeyChecking=accept-new ${REMOTE_USER}@${SERVER}:${REMOTE_HOME_DIR}/.kube/config ${HOME}/.kube/config
     sed -i "s/127.0.0.1/${REMOTE_HOSTNAME}/g" ${HOME}/.kube/config
     sed -i "s/default/cluster1/g" ${HOME}/.kube/config
     ls ${HOME}/.kube/config 2>&1 | sed 's/^/[+] Kubeconfig successfully stored as /'
@@ -73,7 +73,7 @@ fi
 for AGENT in "${AGENTS_ARR[@]}"; do
     AGENT=$(echo "${AGENT}" | xargs)
     echo -e "[!] Deploying RKE2 agent on ${AGENT}...\n"
-    ssh -o StrictHostKeyChecking=no -T root@${AGENT} <<EOSSH
+    ssh -o StrictHostKeyChecking=accept-new -T root@${AGENT} <<EOSSH
 mkdir -vp /etc/rancher/rke2/
 cat <<EOF > /etc/rancher/rke2/config.yaml
 server: https://${SERVER_INTERNAL_IP}:9345
@@ -86,9 +86,9 @@ EOSSH
     echo -e "[+] Done deploying agent on ${AGENT}.\n\n"
 done
 
-REMOTE_HOSTNAME=$(ssh -o StrictHostKeyChecking=no -T ${REMOTE_USER}@${SERVER} hostname)
+REMOTE_HOSTNAME=$(ssh -o StrictHostKeyChecking=accept-new -T ${REMOTE_USER}@${SERVER} hostname)
 echo "[!] Retrieving kubeconfig from RKE2 Server node..."
-scp -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER}:${REMOTE_HOME_DIR}/.kube/config ${HOME}/.kube/config
+scp -o StrictHostKeyChecking=accept-new ${REMOTE_USER}@${SERVER}:${REMOTE_HOME_DIR}/.kube/config ${HOME}/.kube/config
 sed -i "s/127.0.0.1/${REMOTE_HOSTNAME}/g" ${HOME}/.kube/config
 sed -i "s/default/myi-afnr/g" ${HOME}/.kube/config
 ls ${HOME}/.kube/config 2>&1 | sed 's/^/[+] Kubeconfig successfully stored as /'
